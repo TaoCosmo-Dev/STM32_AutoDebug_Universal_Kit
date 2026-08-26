@@ -23,7 +23,7 @@
 
 ### 第 1 步：克隆代码仓库
 ```bash
-git clone https://你的Git仓库地址/STM32_AutoDebug_Universal_Kit.git
+git clone https://github.com/TaoCosmo-Dev/STM32_AutoDebug_Universal_Kit.git
 cd STM32_AutoDebug_Universal_Kit
 ```
 
