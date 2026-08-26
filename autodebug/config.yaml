@@ -1,0 +1,28 @@
+# STM32 Auto-Debug & Self-Healing Pipeline Configuration
+keil:
+  uv4_path: "D:\\keil5\\UV4\\UV4.exe"
+  fromelf_path: "D:\\keil5\\ARM\\ARMCC\\bin\\fromelf.exe"
+
+debugger:
+  type: "pyocd"          # Options: "pyocd", "jlink", "gdb"
+  target_override: "stm32f407zg" # Target chip part number for PyOCD / J-Link
+  probe_id: null         # Unique probe serial number or null for auto-select
+  jlink_path: "D:\\J-LINK\\JLink.exe"
+  jlink_gdb_server: "D:\\J-LINK\\JLinkGDBServerCL.exe"
+
+serial:
+  port: "COM3"           # Serial port connected to STM32 UART
+  baudrate: 115200
+  timeout_seconds: 10    # Timeout waiting for test result or assert
+
+test:
+  max_repair_iterations: 5
+  pass_keywords:
+    - "[ALL TESTS PASSED]"
+    - "TESTS_PASSED"
+    - "OK (all tests passed)"
+  fail_keywords:
+    - "[TEST FAILED]"
+    - "ASSERTION_FAILED"
+    - "HardFault_Handler"
+    - "cm_backtrace"

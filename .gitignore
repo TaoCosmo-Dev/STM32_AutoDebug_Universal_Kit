@@ -1,0 +1,48 @@
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environments
+venv/
+env/
+ENV/
+.venv/
+
+# Keil & Build artifacts
+*.axf
+*.hex
+*.bin
+*.map
+*.htm
+*.d
+*.o
+*.crf
+*.dep
+*.build_log.htm
+*.uvguix.*
+*.uvoptx
+*.bak
+
+# Temporary test logs
+diagnostic_report.json
+*.tmp
