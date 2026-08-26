@@ -27,10 +27,12 @@ def find_uvprojx():
         for f in files:
             if f.endswith(".uvprojx"):
                 return os.path.join(root, f)
-    # Check Desktop project fallback
-    desktop_p = r"C:\Users\77517\Desktop\STM32F446_WS2812B\MDK-ARM\STM32F446_WS2812B.uvprojx"
-    if os.path.exists(desktop_p):
-        return desktop_p
+    # Check one directory level up
+    parent = os.path.dirname(cwd)
+    for root, dirs, files in os.walk(parent):
+        for f in files:
+            if f.endswith(".uvprojx"):
+                return os.path.join(root, f)
     return None
 
 
@@ -73,12 +75,13 @@ def main():
     print(f"[+] Build SUCCESS: 0 Error(s), {len(build_res.warnings)} Warning(s).")
     print(f"    AXF: {build_res.axf_path}")
 
-    # 2. Flash to hardware (if hex exists)
-    if args.flash and build_res.hex_path and os.path.exists(build_res.hex_path):
+    # 2. Flash to hardware (Supports AXF and HEX)
+    flash_bin = build_res.axf_path or build_res.hex_path
+    if args.flash and flash_bin and os.path.exists(flash_bin):
         print("\n>>> [2/3] Flashing to Target MCU via Probe...")
         probe = HardwareProbe(config.debugger)
         if probe.probe_available:
-            ok = probe.flash(build_res.hex_path)
+            ok = probe.flash(flash_bin)
             if ok:
                 print("[+] Hardware Flashing Complete & Target Reset!")
             else:

@@ -37,10 +37,15 @@ Write-Host "`n[步骤 2/3] 正在安装驱动库 (清华大学高速镜像源)..
 & $pyPath -m pip install -i https://pypi.tuna.tsinghua.edu.cn/simple --trusted-host pypi.tuna.tsinghua.edu.cn pyocd pyelftools pyserial pyyaml pylink-square
 
 # 3. 安装 STM32 CMSIS Pack
-Write-Host "`n[步骤 3/3] 正在配置 STM32 芯片支持包..." -ForegroundColor Yellow
-& $pyPath -m pyocd pack install stm32f4
+Write-Host "`n[步骤 3/4] 正在配置 STM32 芯片支持包..." -ForegroundColor Yellow
+& $pyPath -m pyocd pack install stm32f4 *>$null
+
+# 4. 运行自检
+Write-Host "`n[步骤 4/4] 正在运行 Keil 与硬件探针自适应检测..." -ForegroundColor Yellow
+& $pyPath -c "import sys; sys.path.insert(0, '$PSScriptRoot'); from autodebug.config import AutoDebugConfig; cfg = AutoDebugConfig.load(); print('  [+] Keil UV4 路径 :', cfg.keil.uv4_path); print('  [+] 检测到探针   :', cfg.debugger.probe_id or '未连接探针(随时插入USB即可)');"
 
 Write-Host "`n=====================================================================" -ForegroundColor Cyan
-Write-Host " 🎉 [环境就绪] 这台电脑已具备 STM32 自动化调试与修复能力！" -ForegroundColor Green
+Write-Host " 🎉 [环境就绪] 这台电脑已具备 STM32 自动化调试与自愈能力！" -ForegroundColor Green
+Write-Host " 下一步：直接将你的新工程文件夹拖拽到 inject_to_project.bat 即可！" -ForegroundColor Yellow
 Write-Host "=====================================================================" -ForegroundColor Cyan
 Read-Host "按回车键完成"
