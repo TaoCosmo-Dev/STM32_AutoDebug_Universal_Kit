@@ -37,6 +37,15 @@ class HardwareProbe:
     def __init__(self, config: DebuggerConfig):
         self.config = config
 
+    @property
+    def probe_available(self) -> bool:
+        try:
+            from pyocd.core.helpers import ConnectHelper
+            probes = ConnectHelper.get_all_connected_probes(blocking=False)
+            return len(probes) > 0
+        except Exception:
+            return bool(self.config.probe_id)
+
     def flash(self, binary_path: str) -> bool:
         """Flashes .axf/.elf or .hex/.bin into target MCU."""
         binary_path = os.path.abspath(binary_path)

@@ -18,7 +18,7 @@ from autodebug.builder import KeilBuilder
 from autodebug.hardware_probe import HardwareProbe
 from autodebug.serial_monitor import SerialMonitor
 from autodebug.config import AutoDebugConfig
-from autodebug.diagnostic_report import DiagnosticReportGenerator
+from autodebug.diagnostic_report import DiagnosticReporter
 
 
 def find_uvprojx():
