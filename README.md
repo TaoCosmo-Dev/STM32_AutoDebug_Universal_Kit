@@ -1,8 +1,23 @@
 # 🚀 STM32 硬件在环全流程固件架构师与自愈开发套件
 ### (STM32 AutoDebug & Firmware Copilot Universal Kit)
 
-> **核心信仰**：**谋定而后动，系统稳定与硬件安全压倒一切。**  
-> **拒绝盲目动手！** 从用户的模糊想法出发，强制执行 **Grill-Me 5大分支深度访谈**（时钟晶振、引脚冲突、面板偏移、DMA驱动、RTOS），输出**小白防呆型硬件接线指南**。用户只需负责照图插线，剩下的代码编写、Keil 0 Error 编译自愈、JTAG 在线烧录、CPU 寄存器遥测与交互控制台全部由 AI 全自动闭环完成！
+[![GitHub Release](https://img.shields.io/badge/Release-v1.1.0-blue?style=flat-square&logo=github)](https://github.com/TaoCosmo-Dev/STM32_AutoDebug_Universal_Kit/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg?style=flat-square)](LICENSE)
+[![Platform](https://img.shields.io/badge/Platform-STM32%20%7C%20Cortex--M-orange?style=flat-square)]()
+[![First-Principles](https://img.shields.io/badge/Engineering-First--Principles-brightgreen?style=flat-square)]()
+
+> **核心信仰**：**谋定而后动，系统稳定与硬件安全压倒一切。第一性原理深层归因，拒绝过度工程。**  
+> **拒绝盲目动手！** 从用户的模糊想法出发，强制执行 **Grill-Me 5大分支深度访谈**（时钟晶振、引脚冲突、面板偏移、DMA驱动、RTOS），输出**小白防呆型硬件接线指南**。用户只需负责照图插线，剩下的代码编写、Keil 0 Error 编译自愈、JTAG 多探针免阻塞在线烧录、串口自动嗅探、CPU 寄存器遥测与交互控制台全部由 AI 全自动闭环完成！
+
+---
+
+## 💡 第一性原理与务实工程铁律 (First-Principles Mandate)
+
+本项目坚决践行**“第一性原理与零过度工程”**四大工程铁律：
+1. 🔬 **第一性原理深层归因 (Root-Cause from Silicon)**：遇 Bug（如显存镜像、闪烁、死锁）必须追溯至芯片寄存器位定义（MADCTL / RCC / SCB）、时钟树与物理层机制，严禁碰运气式盲目试错；
+2. 🚫 **严厉拒绝过度工程 (Zero Over-Engineering & YAGNI)**：在裸机状态机足以 33 FPS 丝滑运行且 RAM 充足时，严禁无意义强上复杂 RTOS，坚决砍掉虚无自嗨的花架子；
+3. 🏁 **清晰坚固的交付边界 (Ruthless Definition of Done)**：凡达成 “Keil 0 Error 全量构建 + JTAG 探针在线烧录 + CPU 存活遥测通过 + 实机功能 100% 验收”，即达到黄金发布标准立即封版；
+4. ⚡ **全自动无阻塞流水线 (Zero-Interaction Autonomy)**：多调试探针自动静默仲裁，串口 COM 口自动嗅探，杜绝任何阻塞自动化脚本的终端交互弹窗。
 
 ---
 
@@ -120,8 +135,10 @@ STM32_AutoDebug_Universal_Kit/
 ├── autodebug/                # 自动化构建、烧录、寄存器遥测核心引擎
 │   ├── config.py             # 注册表扫描与探针自适应模块
 │   ├── builder.py            # Keil UV4 驱动与编译日志解析器
-│   ├── hardware_probe.py     # PyOCD JTAG 探针与寄存器读取器
+│   ├── hardware_probe.py     # PyOCD JTAG 探针（多探针自动静默仲裁）
+│   ├── serial_monitor.py     # 智能串口监听器（COM口自动嗅探+断言解析）
 │   ├── fault_analyzer.py     # Cortex-M HardFault 智能故障诊断器
+│   ├── diagnostic_report.py  # 结构化诊断上下文生成器
 │   └── symbol_resolver.py    # AXF/ELF 符号与源码行号映射器
 └── templates/                # 标准规范模板库
     ├── grill_me_hardware_checklist.md # 5大分支 Grill-Me 访谈标准模板
