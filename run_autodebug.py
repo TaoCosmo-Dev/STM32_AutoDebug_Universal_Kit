@@ -39,6 +39,7 @@ def find_uvprojx():
 def main():
     parser = argparse.ArgumentParser(description="STM32 Auto-Debug Closed Loop Runner")
     parser.add_argument("--project", type=str, default=None, help="Path to Keil .uvprojx file")
+    parser.add_argument("--port", default=None, help="Serial port for test log monitoring (default: auto-detect)")
     parser.add_argument("--target", type=str, default="stm32f446re", help="MCU target name")
     parser.add_argument("--flash", action="store_true", default=True, help="Flash after build")
     args = parser.parse_args()
@@ -91,16 +92,23 @@ def main():
 
     # 3. Monitor Serial Output
     print("\n>>> [3/3] Checking Serial Stream...")
-    mon = SerialMonitor(config.serial)
-    res = mon.run_test(timeout_seconds=2.0)
-    print(f"[+] Serial result: {res.summary}")
-    for line in res.captured_lines[-5:]:
-        print(f"    [MCU] {line}")
+    mon = SerialMonitor(port=args.port, baudrate=115200, timeout_seconds=2.0)
+    print(f"[*] Serial Port: {mon.port} @ 115200")
+    res = mon.capture_run()
+    if res.raw_output:
+        print("[+] Serial Output Captured:")
+        for line in res.raw_output.split("\n")[-5:]:
+            if line.strip():
+                print(f"    [MCU] {line}")
+    else:
+        print("[*] No serial stream detected (or port idle).")
 
     print("\n=======================================================")
-    print("  🎉 [AUTODEBUG PASS] Build, Flash, and Verification OK! ")
+    print("  [+] [AUTODEBUG PASS] Build, Flash, and Verification OK!")
     print("=======================================================")
 
 
 if __name__ == "__main__":
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     main()

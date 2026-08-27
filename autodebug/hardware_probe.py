@@ -60,16 +60,32 @@ class HardwareProbe:
         else:
             return self._flash_pyocd(binary_path)
 
+    def _get_best_probe_unique_id(self) -> Optional[str]:
+        """Automatically selects probe without interactive prompt blocking."""
+        if self.config.probe_id:
+            return self.config.probe_id
+        try:
+            from pyocd.core.helpers import ConnectHelper
+            probes = ConnectHelper.get_all_connected_probes(blocking=False)
+            if probes:
+                # Prefer DAPLink / fireDAP / STLink
+                return probes[0].unique_id
+        except Exception:
+            pass
+        return None
+
     def _flash_pyocd(self, binary_path: str) -> bool:
+        probe_uid = self._get_best_probe_unique_id()
+        target_type = self.config.target_override or "stm32f407zg"
         try:
             from pyocd.core.helpers import ConnectHelper
             from pyocd.flash.file_programmer import FileProgrammer
 
-            target_type = self.config.target_override or "stm32f407zg"
             session = ConnectHelper.session_with_chosen_probe(
                 target_override=target_type,
-                unique_id=self.config.probe_id,
-                auto_unlock=True
+                unique_id=probe_uid,
+                auto_unlock=True,
+                blocking=False
             )
             if session is None:
                 return False
@@ -80,10 +96,13 @@ class HardwareProbe:
                 session.target.reset_and_halt()
                 session.target.resume()
             return True
-        except Exception as e:
-            # Fallback to pyocd CLI
+        except Exception:
+            # Fallback to pyocd CLI with explicit -u to avoid interactive prompt
             try:
-                cmd = ["pyocd", "flash", "-t", self.config.target_override or "stm32f407zg", binary_path]
+                cmd = ["pyocd", "flash"]
+                if probe_uid:
+                    cmd.extend(["-u", probe_uid])
+                cmd.extend(["-t", target_type, binary_path])
                 res = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
                 return res.returncode == 0
             except Exception:

@@ -39,3 +39,20 @@ python run_autodebug.py --project "MDK-ARM/STM32F446_WS2812B.uvprojx"
 4. **通信防死锁**：所有硬件等待 `while` 循环必须配备超时退出计数器（Timeout），严禁裸 `while` 死等。
 5. **结构体对齐**：通信协议结构体必须显式指定 1 字节对齐（`#pragma pack(1)` 或 `__attribute__((packed))`）。
 6. **硬件安全限流**：驱动大功率外设（如 WS2812B 矩阵、电机、MOS 管）时，必须在软件层做全局电流与占空比限幅，防止电源跌落或器件损坏。
+
+---
+
+## 4. 第一性原理与务实工程铁律 (First-Principles & Pragmatic Engineering Mandate)
+
+1. **第一性原理深层归因 (Root-Cause from Silicon)**：
+   - 遇到任何异常（如画面镜像、屏幕闪烁、死机卡顿），严禁碰运气式盲改参数；
+   - 必须从**芯片寄存器位定义（MADCTL / RCC / SCB）、时钟树倍频公式、物理显存映射与硬件电气特性**出发推导根因并精准解决。
+2. **严厉拒绝过度工程 (Zero Over-Engineering & YAGNI)**：
+   - 牢记“如无必要，勿增实体”（You Aren't Gonna Need It）；
+   - 在裸机状态机足以 33 FPS 丝滑运行且 RAM 充足时，严禁无意义强上复杂 RTOS；
+   - 严禁为了“看起来高大上”而添加人类自嗨式的无用网页报表或脱离当前环境的复杂跨平台框架，把算力与精力 100% 聚焦在核心交付目标上。
+3. **清晰坚固的交付边界 (Ruthless Definition of Done)**：
+   - 软件工程不存在“理论上的绝对完美”；
+   - 凡达成 **“Keil 0 Error 全量构建 + JTAG 探针在线烧录 + CPU 存活遥测通过 + 实机功能 100% 验收”**，即达到黄金发布标准，立即封版交付。
+4. **全自动无阻塞流水线 (Zero-Interaction Autonomy)**：
+   - 多调试探针自动静默仲裁，串口 COM 口自动嗅探，严禁任何阻塞自动化脚本的终端交互弹窗。

@@ -22,12 +22,28 @@ class SerialTestResult:
 
 
 class SerialMonitor:
-    def __init__(self, port: str = "COM3", baudrate: int = 115200, timeout_seconds: float = 10.0):
-        self.port = port
+    def __init__(self, port: Optional[str] = None, baudrate: int = 115200, timeout_seconds: float = 10.0):
+        self.port = port or self._auto_detect_port()
         self.baudrate = baudrate
         self.timeout_seconds = timeout_seconds
         self._buffer: List[str] = []
         self._is_running = False
+
+    @staticmethod
+    def _auto_detect_port() -> str:
+        try:
+            import serial.tools.list_ports
+            ports = list(serial.tools.list_ports.comports())
+            if not ports:
+                return "COM3"
+            for p in ports:
+                desc = (p.description or "").lower()
+                hwid = (p.hwid or "").lower()
+                if any(k in desc or k in hwid for k in ["ch340", "cp210", "ft232", "dap", "stlink", "cmsis", "usb-serial", "serial"]):
+                    return p.device
+            return ports[0].device
+        except Exception:
+            return "COM3"
 
     def capture_run(self,
                     pass_keywords: Optional[List[str]] = None,
