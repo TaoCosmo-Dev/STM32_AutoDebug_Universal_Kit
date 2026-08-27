@@ -4,17 +4,15 @@
 [![GitHub Release](https://img.shields.io/badge/Release-v1.1.0-blue?style=flat-square&logo=github)](https://github.com/TaoCosmo-Dev/STM32_AutoDebug_Universal_Kit/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg?style=flat-square)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-STM32%20%7C%20Cortex--M-orange?style=flat-square)]()
-[![First-Principles](https://img.shields.io/badge/Engineering-First--Principles-brightgreen?style=flat-square)]()
-
-> **核心信仰**：**谋定而后动，系统稳定与硬件安全压倒一切。第一性原理深层归因，拒绝过度工程。**  
-> **拒绝盲目动手！** 从用户的模糊想法出发，强制执行 **Grill-Me 5大分支深度访谈**（时钟晶振、引脚冲突、面板偏移、DMA驱动、RTOS），输出**小白防呆型硬件接线指南**。用户只需负责照图插线，剩下的代码编写、Keil 0 Error 编译自愈、JTAG 多探针免阻塞在线烧录、串口自动嗅探、CPU 寄存器遥测与交互控制台全部由 AI 全自动闭环完成！
+[![First-Principles](https://img.shields.io/badge/Engineering-First--Princ> **核心信仰**：**谋定而后动，系统稳定与硬件安全压倒一切。第一性原理深层归因，拒绝过度工程。**  
+> **拒绝盲目动手！** 从用户的模糊想法出发，强制执行 **Grill-Me 5大硬件决策访谈**（时钟晶振、引脚复用排查、外设物理指标、通信驱动模式、系统架构选型），输出**小白防呆型硬件接线指南**。用户只需负责照图插线，剩下的代码编写、Keil 0 Error 编译自愈、JTAG 多探针免阻塞在线烧录、串口自动嗅探、CPU 寄存器遥测与交互控制台全部由 AI 全自动闭环完成！
 
 ---
 
 ## 💡 第一性原理与务实工程铁律 (First-Principles Mandate)
 
 本项目坚决践行**“第一性原理与零过度工程”**四大工程铁律：
-1. 🔬 **第一性原理深层归因 (Root-Cause from Silicon)**：遇 Bug（如显存镜像、闪烁、死锁）必须追溯至芯片寄存器位定义（MADCTL / RCC / SCB）、时钟树与物理层机制，严禁碰运气式盲目试错；
+1. 🔬 **第一性原理深层归因 (Root-Cause from Silicon)**：遇 Bug（如显存镜像、闪烁、死锁）必须追溯至芯片寄存器位定义（MADCTL / RCC / SCB）、时钟树与物理层机制，严禁碰运气式盲改参数；
 2. 🚫 **严厉拒绝过度工程与虚假需求 (Zero Over-Engineering & YAGNI)**：当轻量架构与基础状态机足以满足系统指标时，严禁为了“形式高大上”无意义引入过度复杂的中间件；仅在存在真实多任务/多协议栈并发需求时才正规引入 RTOS；
 3. 🏁 **清晰坚固的交付边界 (Ruthless Definition of Done)**：凡达成 “Keil 0 Error 全量构建 + JTAG 探针在线烧录 + CPU 存活遥测通过 + 实机功能 100% 验收”，即达到黄金发布标准立即封版；
 4. ⚡ **全自动无阻塞流水线 (Zero-Interaction Autonomy)**：多调试探针自动静默仲裁，串口 COM 口自动嗅探，杜绝任何阻塞自动化脚本的终端交互弹窗。
@@ -27,11 +25,11 @@
 graph TD
     subgraph 阶段 1: Grill-Me 深度访谈对齐
         A[用户提出新需求/新想法] --> B[AI 强制启动 Grill-Me 5大硬件分支追问]
-        B --> B1[分支1: 外部晶振 HSE 频率 8M/12M/25M 与 168MHz 时钟树]
-        B --> B2[分支2: 开发板型号与 SPI1/2 引脚复用冲突排查]
-        B --> B3[分支3: 屏幕/外设光学裁切与显存偏移行列]
-        B --> B4[分支4: 硬件 SPI+DMA 双缓冲 vs 轮询通信架构]
-        B --> B5[分支5: 裸机 vs FreeRTOS vs LVGL 架构]
+        B --> B1[分支1: 外部晶振 HSE 频率与系统主频时钟树]
+        B --> B2[分支2: 开发板型号与 SPI/I2C/UART/PWM/ADC 引脚复用冲突排查]
+        B --> B3[分支3: 外设物理指标 显存偏置/传感器量程/电机极对数/总线波特率]
+        B --> B4[分支4: 通信驱动模式 硬件 DMA 双缓冲 / 中断环形缓冲区 vs 轮询]
+        B --> B5[分支5: 系统架构 裸机状态机 vs RTOS 多任务并发 vs 协议栈]
         B1 & B2 & B3 & B4 & B5 --> C[生成《技术实施方案与架构草案》由用户确认]
     end
     
@@ -57,7 +55,7 @@ graph TD
 
 ---
 
-## 📋 Grill-Me 5大硬件分支访谈标准 (Hardware Decision Tree)
+## 📋 Grill-Me 5大硬件决策访谈标准 (Hardware Decision Tree)
 
 在进入任何编码或接线前，AI 必须严格执行以下追问与排查：
 
@@ -65,15 +63,16 @@ graph TD
    - 确切晶振频率（`8.000MHz` / `12.000MHz` / `25.000MHz`）；
    - 精准计算 PLL 倍频系数（$\text{SYSCLK} = \frac{\text{HSE}}{\text{PLL\_M}} \times \frac{\text{PLL\_N}}{\text{PLL\_P}}$），杜绝超频死机或延时倍速失效。
 2. 🔌 **开发板型号与引脚冲突排查**：
-   - 核对板载资源（正点原子 / 野火 / 自定义板），排查目标引脚（如 `PA5`/`PA7`）是否已被板载 SPI Flash、以太网 PHY、板载 LED 占用。
-3. 🖥️ **屏幕光学与显存偏移行列**：
-   - 驱动芯片子型号（ST7735S / ST7789 / SSD1306）；
-   - 物理裁切与显存偏移（如 0.96寸 80x160 的 $X_{\text{offset}}=26, Y_{\text{offset}}=1$）；
-   - IPS 颜色反转（`0x21 INVON`）。
+   - 核对板载资源（正点原子 / 野火 / 立创 / 自定义板），排查目标引脚（SPI/I2C/UART/PWM/ADC）是否已被板载 SPI Flash、以太网 PHY、板载 LED 占用。
+3. ⚙️ **外设与执行机构核心物理指标 (Peripherals & Actuators)**：
+   - **显示面板**：ST7735S / ST7789 / SSD1306 显存偏置、RGB565 格式与颜色反转；
+   - **电机与逆变器**：极对数、编码器 CPR/霍尔、死区时间与驱动芯片类型 (DRV8302/TMC2209)；
+   - **传感器与采样**：IMU 陀螺仪 / 温湿度 I2C 从机地址、量程与采样率；
+   - **通信总线模组**：CAN / RS485 波特率、滤波器与流控引脚。
 4. ⚡ **通信时序与驱动模式**：
-   - 硬件 `SPI+DMA` 双缓冲异步高速刷屏（60 FPS） vs 软件模拟 SPI 轮询。
-5. 🏗️ **系统框架与图形栈**：
-   - 裸机前后台轮询、FreeRTOS 多任务或 LVGL 9.0 嵌入式图形界面。
+   - 硬件 DMA 双缓冲 / 中断环形缓冲区 (Ring Buffer) 异步高速传输 vs 阻塞轮询。
+5. 🏗️ **系统框架与架构选型**：
+   - 裸机前后台状态机 vs RTOS (FreeRTOS/RT-Thread) 多任务并发调度 vs 图形/网络协议栈。
 
 ---
 
