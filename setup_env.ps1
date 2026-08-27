@@ -37,8 +37,8 @@ Write-Host "`n[步骤 2/3] 正在安装驱动库 (清华大学高速镜像源)..
 & $pyPath -m pip install -i https://pypi.tuna.tsinghua.edu.cn/simple --trusted-host pypi.tuna.tsinghua.edu.cn pyocd pyelftools pyserial pyyaml pylink-square
 
 # 3. 安装 STM32 CMSIS Pack
-Write-Host "`n[步骤 3/4] 正在配置 STM32 芯片支持包..." -ForegroundColor Yellow
-& $pyPath -m pyocd pack install stm32f4 *>$null
+Write-Host "`n[步骤 3/4] 正在配置 STM32 常用芯片支持包 (F1 / F4 / G4 / H7)..." -ForegroundColor Yellow
+& $pyPath -m pyocd pack install stm32f1 stm32f4 stm32g4 stm32h7 *>$null
 
 # 4. 运行自检
 Write-Host "`n[步骤 4/4] 正在运行 Keil 与硬件探针自适应检测..." -ForegroundColor Yellow

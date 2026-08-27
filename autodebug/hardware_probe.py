@@ -76,7 +76,7 @@ class HardwareProbe:
 
     def _flash_pyocd(self, binary_path: str) -> bool:
         probe_uid = self._get_best_probe_unique_id()
-        target_type = self.config.target_override or "stm32f407zg"
+        target_type = self.config.target_override or "cortex_m"
         try:
             from pyocd.core.helpers import ConnectHelper
             from pyocd.flash.file_programmer import FileProgrammer
@@ -114,7 +114,7 @@ class HardwareProbe:
             jlink = pylink.JLink()
             jlink.open(serial_no=self.config.probe_id)
             jlink.set_tif(pylink.enums.JLinkInterfaces.SWD)
-            jlink.connect(self.config.target_override or "STM32F407ZG")
+            jlink.connect(self.config.target_override or "Cortex-M4")
             jlink.flash_file(binary_path, 0x08000000)
             jlink.reset(halt=False)
             jlink.close()
@@ -127,7 +127,7 @@ class HardwareProbe:
         try:
             from pyocd.core.helpers import ConnectHelper
             session = ConnectHelper.session_with_chosen_probe(
-                target_override=self.config.target_override or "stm32f407zg",
+                target_override=self.config.target_override or "cortex_m",
                 unique_id=self.config.probe_id
             )
             if not session:
@@ -191,7 +191,7 @@ class HardwareProbe:
         try:
             from pyocd.core.helpers import ConnectHelper
             session = ConnectHelper.session_with_chosen_probe(
-                target_override=self.config.target_override or "stm32f407zg",
+                target_override=self.config.target_override or "cortex_m",
                 unique_id=self.config.probe_id
             )
             if not session:

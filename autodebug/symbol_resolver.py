@@ -137,12 +137,19 @@ class SymbolResolver:
         if not os.path.isabs(actual_path) or not os.path.exists(actual_path):
             # Try resolving relative to axf directory or its parents
             axf_dir = os.path.dirname(self.axf_path)
+            basename = os.path.basename(file_path)
             candidates = [
                 os.path.normpath(os.path.join(axf_dir, file_path)),
                 os.path.normpath(os.path.join(axf_dir, "..", file_path)),
                 os.path.normpath(os.path.join(axf_dir, "..", "..", file_path)),
-                os.path.normpath(os.path.join(axf_dir, "..", "User_Main", os.path.basename(file_path))),
-                os.path.normpath(os.path.join(axf_dir, "..", "Core", "Src", os.path.basename(file_path))),
+                os.path.normpath(os.path.join(axf_dir, "..", "User", basename)),
+                os.path.normpath(os.path.join(axf_dir, "..", "USER", basename)),
+                os.path.normpath(os.path.join(axf_dir, "..", "Src", basename)),
+                os.path.normpath(os.path.join(axf_dir, "..", "Source", basename)),
+                os.path.normpath(os.path.join(axf_dir, "..", "App", basename)),
+                os.path.normpath(os.path.join(axf_dir, "..", "Core", "Src", basename)),
+                os.path.normpath(os.path.join(axf_dir, "..", "..", "User", basename)),
+                os.path.normpath(os.path.join(axf_dir, "..", "..", "Core", "Src", basename)),
             ]
             for cand in candidates:
                 if os.path.exists(cand):

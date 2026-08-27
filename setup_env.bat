@@ -54,8 +54,8 @@ if %ERRORLEVEL% NEQ 0 (
 )
 
 echo.
-echo [2/3] Installing STM32F4 CMSIS-Pack for hardware probe...
-%PY% -m pyocd pack install stm32f4 >nul 2>&1
+echo [2/3] Installing STM32 CMSIS-Packs (F1, F4, G4, H7) for hardware probe...
+%PY% -m pyocd pack install stm32f1 stm32f4 stm32g4 stm32h7 >nul 2>&1
 
 echo.
 echo [3/3] Running auto-detection self-test (Keil + Probe)...

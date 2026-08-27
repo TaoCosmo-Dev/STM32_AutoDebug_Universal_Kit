@@ -47,10 +47,16 @@ class AutoDebugEngine:
         max_iters = self.config.test.max_repair_iterations
         last_report = None
 
+        # Auto-detect target chip from project file
+        detected_target = self.builder.get_device_name(uvprojx_path)
+        if detected_target and not self.config.debugger.target_override:
+            self.config.debugger.target_override = detected_target
+
         print(f"\n=======================================================")
         print(f"[*] Starting STM32 Auto-Debug Closed Loop for:")
-        print(f"    Project: {uvprojx_path}")
-        print(f"    Max Iterations: {max_iters}")
+        print(f"    Project   : {uvprojx_path}")
+        print(f"    Target MCU: {self.config.debugger.target_override or 'cortex_m'}")
+        print(f"    Max Iters : {max_iters}")
         print(f"=======================================================\n")
 
         for iteration in range(1, max_iters + 1):

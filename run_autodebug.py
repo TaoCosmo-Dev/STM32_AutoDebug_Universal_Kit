@@ -55,7 +55,7 @@ def main():
 
     # Auto-detect target MCU chip name
     detected_target = builder.get_device_name(proj_path)
-    target_mcu = args.target or config.debugger.target_override or detected_target or "stm32f407zg"
+    target_mcu = args.target or config.debugger.target_override or detected_target or "cortex_m"
     config.debugger.target_override = target_mcu
     print(f"[*] Target MCU     : {target_mcu.upper()}")
 
