@@ -1,10 +1,12 @@
 # 🚀 STM32 硬件在环全流程固件架构师与自愈开发套件
 ### (STM32 AutoDebug & Firmware Copilot Universal Kit)
 
-[![GitHub Release](https://img.shields.io/badge/Release-v1.1.0-blue?style=flat-square&logo=github)](https://github.com/TaoCosmo-Dev/STM32_AutoDebug_Universal_Kit/releases)
+[![GitHub Release](https://img.shields.io/badge/Release-v1.1.1-blue?style=flat-square&logo=github)](https://github.com/TaoCosmo-Dev/STM32_AutoDebug_Universal_Kit/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg?style=flat-square)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-STM32%20%7C%20Cortex--M-orange?style=flat-square)]()
-[![First-Principles](https://img.shields.io/badge/Engineering-First--Princ> **核心信仰**：**谋定而后动，系统稳定与硬件安全压倒一切。第一性原理深层归因，拒绝过度工程。**  
+[![First-Principles](https://img.shields.io/badge/Engineering-First--Principles-brightgreen?style=flat-square)]()
+
+> **核心信仰**：**谋定而后动，系统稳定与硬件安全压倒一切。第一性原理深层归因，拒绝过度工程。**  
 > **拒绝盲目动手！** 从用户的模糊想法出发，强制执行 **Grill-Me 5大硬件决策访谈**（时钟晶振、引脚复用排查、外设物理指标、通信驱动模式、系统架构选型），输出**小白防呆型硬件接线指南**。用户只需负责照图插线，剩下的代码编写、Keil 0 Error 编译自愈、JTAG 多探针免阻塞在线烧录、串口自动嗅探、CPU 寄存器遥测与交互控制台全部由 AI 全自动闭环完成！
 
 ---
