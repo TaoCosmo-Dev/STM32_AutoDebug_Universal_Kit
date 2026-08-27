@@ -104,7 +104,7 @@ class KeilConfig:
 @dataclass
 class DebuggerConfig:
     type: str = "pyocd"  # "pyocd", "jlink", "gdb"
-    target_override: str = "stm32f446re"
+    target_override: Optional[str] = None
     probe_id: Optional[str] = None
     jlink_path: str = r"C:\Program Files\SEGGER\JLink\JLink.exe"
     jlink_gdb_server: str = r"C:\Program Files\SEGGER\JLink\JLinkGDBServerCL.exe"
@@ -116,8 +116,8 @@ class DebuggerConfig:
 
 @dataclass
 class SerialConfig:
-    port: str = "COM6"
-    baudrate: int = 921600
+    port: Optional[str] = None
+    baudrate: int = 115200
     timeout_seconds: float = 10.0
 
 

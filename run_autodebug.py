@@ -40,7 +40,7 @@ def main():
     parser = argparse.ArgumentParser(description="STM32 Auto-Debug Closed Loop Runner")
     parser.add_argument("--project", type=str, default=None, help="Path to Keil .uvprojx file")
     parser.add_argument("--port", default=None, help="Serial port for test log monitoring (default: auto-detect)")
-    parser.add_argument("--target", type=str, default="stm32f446re", help="MCU target name")
+    parser.add_argument("--target", type=str, default=None, help="MCU target name (default: auto-detected from .uvprojx)")
     parser.add_argument("--flash", action="store_true", default=True, help="Flash after build")
     args = parser.parse_args()
 
@@ -52,6 +52,12 @@ def main():
     print(f"[*] Target Project : {proj_path}")
     config = AutoDebugConfig.load()
     builder = KeilBuilder(config.keil.uv4_path)
+
+    # Auto-detect target MCU chip name
+    detected_target = builder.get_device_name(proj_path)
+    target_mcu = args.target or config.debugger.target_override or detected_target or "stm32f407zg"
+    config.debugger.target_override = target_mcu
+    print(f"[*] Target MCU     : {target_mcu.upper()}")
 
     # 1. Build with Keil
     print("\n>>> [1/3] Building with Keil UV4...")

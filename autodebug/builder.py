@@ -79,6 +79,22 @@ class KeilBuilder:
 
         return None, None
 
+    def get_device_name(self, uvprojx_path: str) -> Optional[str]:
+        """Auto-detects MCU device part number from .uvprojx XML (e.g. STM32F407ZGTx -> stm32f407zg)."""
+        try:
+            tree = ET.parse(uvprojx_path)
+            root = tree.getroot()
+            dev = root.findtext(".//TargetOption/TargetCommonOption/Device", "")
+            if not dev:
+                dev = root.findtext(".//Device", "")
+            if dev:
+                dev_clean = re.sub(r'x+$', '', dev.strip(), flags=re.IGNORECASE)
+                dev_clean = re.sub(r't\d*$', '', dev_clean, flags=re.IGNORECASE)
+                return dev_clean.lower()
+        except Exception:
+            pass
+        return None
+
     def build(self, uvprojx_path: str, target_name: Optional[str] = None, rebuild: bool = False) -> BuildResult:
         """
         Executes Keil UV4 CLI build.

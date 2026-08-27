@@ -5,13 +5,13 @@ keil:
 
 debugger:
   type: "pyocd"          # Options: "pyocd", "jlink", "gdb"
-  target_override: "stm32f407zg" # Target chip part number for PyOCD / J-Link
-  probe_id: null         # Unique probe serial number or null for auto-select
-  jlink_path: "D:\\J-LINK\\JLink.exe"
-  jlink_gdb_server: "D:\\J-LINK\\JLinkGDBServerCL.exe"
+  target_override: null  # Target chip (null = auto-detect from .uvprojx)
+  probe_id: null         # Probe serial number (null = auto-detect first active probe)
+  jlink_path: "C:\\Program Files\\SEGGER\\JLink\\JLink.exe"
+  jlink_gdb_server: "C:\\Program Files\\SEGGER\\JLink\\JLinkGDBServerCL.exe"
 
 serial:
-  port: "COM3"           # Serial port connected to STM32 UART
+  port: null             # Serial port (null = auto-detect USB-UART COM port)
   baudrate: 115200
   timeout_seconds: 10    # Timeout waiting for test result or assert
 

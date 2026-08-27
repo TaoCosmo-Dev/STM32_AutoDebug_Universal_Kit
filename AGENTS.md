@@ -10,7 +10,7 @@
 
 ```bash
 # 1. 驱动 Keil MDK 全量构建与自愈
-python run_autodebug.py --project "MDK-ARM/STM32F446_WS2812B.uvprojx"
+python run_autodebug.py --project "path/to/YourProject.uvprojx"
 
 # 2. 检查返回状态：
 #    - 若构建失败：自动读取 diagnostic_report.json，分析报错行号并修改源码，重新构建直至 0 Error(s)。
@@ -21,12 +21,16 @@ python run_autodebug.py --project "MDK-ARM/STM32F446_WS2812B.uvprojx"
 ---
 
 ## 2. 需求深度对齐与谋定而后动 (Mandatory Grill-Me Alignment First)
-- **严禁盲目动手与预设参数**：收到新项目、新模块或新屏幕时，严禁自行假设晶振频率或引脚。必须通过结构化交互访谈（Grill-Me）逐一追问清楚 **5 大硬件分支决策**：
+- **严禁盲目动手与预设参数**：收到新项目、新模块或新外设时，严禁自行假设晶振频率或引脚。必须通过结构化交互访谈（Grill-Me）逐一追问清楚 **5 大硬件分支决策**：
   1. **时钟树与外部晶振 (HSE)**：8MHz / 12MHz / 25MHz 确切数值（配错直接导致超频死机与延时错乱）；
-  2. **开发板型号与引脚冲突**：正点原子/野火/核心板，排查 SPI1/SPI2 引脚是否已被板载 SPI Flash、网络芯片或 LED 占用；
-  3. **屏幕光学与显存偏移行列**：ST7735S 80x160 物理窗口偏移（X=26, Y=1）、IPS 颜色反转控制（INVON）；
-  4. **通信时序与驱动模式**：硬件 SPI+DMA 双缓冲异步刷屏 vs 轮询；
-  5. **系统框架**：裸机 vs FreeRTOS vs LVGL 图形栈。
+  2. **开发板型号与引脚冲突**：排查 SPI / I2C / UART / PWM / ADC 引脚是否与板载资源发生功能复用冲突；
+  3. **外设核心物理指标 (Peripherals & Actuators)**：
+     - 显示面板：ST7735S / ST7789 显存偏置、RGB565 格式与颜色反转；
+     - 电机与逆变器：极对数、编码器线数、死区时间与驱动芯片类型；
+     - 传感器与采样：IMU 陀螺仪 / 温湿度 I2C 从机地址、量程与采样率；
+     - 通信总线模组：CAN / RS485 波特率、滤波器与流控引脚。
+  4. **通信时序与驱动模式**：硬件 DMA 双缓冲 / 中断环形缓冲区 vs 轮询；
+  5. **系统框架**：裸机前后台状态机 vs RTOS 多任务并发调度 vs 图形/协议栈。
 - **方案先行**：先给出简明的《技术方案与引脚/架构草案》，向用户确认无误、有 100% 把握后再开始具体编码与设计。
 
 ---

@@ -31,12 +31,13 @@ def handle_build(project_path: str) -> str:
     }, indent=2, ensure_ascii=False)
 
 
-def handle_flash(binary_path: str, target: str = "stm32f446re") -> str:
+def handle_flash(binary_path: str, target: Optional[str] = None) -> str:
     config = AutoDebugConfig.load()
-    config.debugger.target_override = target
+    if target:
+        config.debugger.target_override = target
     probe = HardwareProbe(config.debugger)
     ok = probe.flash(binary_path)
-    return json.dumps({"flash_success": ok, "binary": binary_path, "target": target}, indent=2)
+    return json.dumps({"flash_success": ok, "binary": binary_path, "target": target or config.debugger.target_override}, indent=2)
 
 
 def handle_diagnose(axf_path: str, pc_addr: int, cfsr: int = 0x00008200) -> str:
@@ -54,11 +55,12 @@ def handle_diagnose(axf_path: str, pc_addr: int, cfsr: int = 0x00008200) -> str:
     }, indent=2, ensure_ascii=False)
 
 
-def handle_read_registers(target: str = "stm32f446re") -> str:
+def handle_read_registers(target: Optional[str] = None) -> str:
     config = AutoDebugConfig.load()
-    config.debugger.target_override = target
+    if target:
+        config.debugger.target_override = target
     probe = HardwareProbe(config.debugger)
-    regs = probe.read_core_registers()
+    regs = probe.read_fault_registers()
     if regs:
         return json.dumps({
             "status": "Target Halted",
