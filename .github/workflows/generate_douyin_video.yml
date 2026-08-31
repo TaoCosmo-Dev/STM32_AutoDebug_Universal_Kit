@@ -1,0 +1,37 @@
+name: Generate Douyin Video
+
+on:
+  workflow_dispatch: # 在 GitHub 页面一键点击触发
+
+jobs:
+  render-video:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 1. 检出代码
+        uses: actions/checkout@v4
+
+      - name: 2. 安装中文字体与 FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg fonts-noto-cjk fonts-wqy-microhei
+
+      - name: 3. 配置 Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: 4. 安装渲染依赖
+        run: |
+          pip install -r requirements.txt
+
+      - name: 5. 执行云端视频生成
+        run: |
+          python make_stm32_video.py
+
+      - name: 6. 上传生成的抖音短视频
+        uses: actions/upload-artifact@v4
+        with:
+          name: douyin_stm32_video
+          path: douyin_stm32_video.mp4
+          retention-days: 7
