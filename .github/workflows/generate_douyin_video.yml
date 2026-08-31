@@ -1,6 +1,8 @@
 name: Generate Douyin Video
 
 on:
+  push:
+    branches: [ main ]
   workflow_dispatch: # 在 GitHub 页面一键点击触发
 
 jobs:
