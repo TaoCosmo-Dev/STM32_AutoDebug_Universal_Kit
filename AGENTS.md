@@ -1,6 +1,6 @@
-# AGENTS.md / .cursorrules / CLAUDE.md — STM32 固件自主编程・烧录・自愈调试规范
+# AGENTS.md — STM32 固件自主编程・烧录・自愈调试规范
 
-> 适用于任何 AI Agent（Claude Code / Cursor / Windsurf / Aider / ChatGPT / DeepSeek）。
+> 适用于任何能读文件、能跑终端命令的 AI Agent。
 > 接入本工程后，以下闭环与嵌入式黄金法则是硬约束。
 
 ---

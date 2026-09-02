@@ -6,7 +6,7 @@ Usage:
     (or drag the project folder onto inject_to_project.bat)
 
 What lands in the target:
-    AGENTS.md / .cursorrules / CLAUDE.md   AI rules incl. the mandatory closed loop
+    AGENTS.md                              AI rules: the mandatory closed loop + exit-code contract
     run_autodebug.py                       the runner the AI calls
     autodebug/                             engine (build, flash, monitor, diagnose)
     autodebug.config.yaml                  editable per-project config
@@ -35,46 +35,34 @@ GITIGNORE_LINES = [
 ]
 
 
-# path -> which tool picks it up. Same content everywhere; only the filename differs.
-RULE_TARGETS = [
-    ("AGENTS.md", "通用约定 · Codex CLI / Zed / Jules / Cursor 新版"),
-    ("CLAUDE.md", "Claude Code"),
-    (".cursorrules", "Cursor"),
-    (".windsurfrules", "Windsurf"),
-    (".clinerules", "Cline / Roo Code"),
-    (os.path.join(".github", "copilot-instructions.md"), "GitHub Copilot"),
-]
+# The kit injects exactly ONE rules file. Every agent is told to read it by the opening
+# prompt ("read AGENTS.md"), so scattering per-editor copies (.cursorrules, .clinerules,
+# CLAUDE.md ...) would only duplicate the same text and let the copies drift apart.
+RULES_FILE = "AGENTS.md"
 
 # A file we generated earlier contains this; anything else is the user's own and is kept.
 RULES_FINGERPRINT = "STM32 固件自主编程"
 
 
 def _install_rules(target_dir: str) -> None:
-    src = os.path.join(KIT_DIR, "AGENTS.md")
+    src = os.path.join(KIT_DIR, RULES_FILE)
     if not os.path.exists(src):
-        print("  [!] 套件里缺少 AGENTS.md")
+        print(f"  [!] 套件里缺少 {RULES_FILE}")
         return
-    with io.open(src, encoding="utf-8") as f:
-        rules = f.read()
+    dst = os.path.join(target_dir, RULES_FILE)
 
-    for rel, tool in RULE_TARGETS:
-        dst = os.path.join(target_dir, rel)
-        if os.path.exists(dst):
-            try:
-                with io.open(dst, encoding="utf-8", errors="replace") as f:
-                    existing = f.read()
-            except Exception:
-                existing = ""
-            if RULES_FINGERPRINT not in existing:
-                print(f"  [=] 已有 {rel}，保留你的版本"
-                      f"（想让 {tool} 自动加载，在里面加一行指向 AGENTS.md）")
-                continue
-        parent = os.path.dirname(dst)
-        if parent:
-            os.makedirs(parent, exist_ok=True)
-        with io.open(dst, "w", encoding="utf-8", newline="\n") as f:
-            f.write(rules)
-        print(f"  [+] {rel}（{tool}）")
+    if os.path.exists(dst):
+        try:
+            with io.open(dst, encoding="utf-8", errors="replace") as f:
+                existing = f.read()
+        except Exception:
+            existing = ""
+        if RULES_FINGERPRINT not in existing:
+            print(f"  [=] 已有 {RULES_FILE}，保留你的版本（未覆盖）")
+            return
+
+    shutil.copy2(src, dst)
+    print(f"  [+] {RULES_FILE}（AI 规范，开场白里让 AI 读它即可）")
 
 
 def _copy_file(rel_src: str, dst: str, label: str) -> bool:
@@ -134,8 +122,6 @@ def inject(target_dir: str) -> bool:
     print("=" * 63)
 
     # 1. AI rules ------------------------------------------------------------------
-    # Every mainstream agent reads a different file, so drop the same rules at each
-    # well-known path. AGENTS.md is the cross-tool convention; the rest are per-editor.
     _install_rules(target_dir)
 
     # 2. Runner + engine ----------------------------------------------------------

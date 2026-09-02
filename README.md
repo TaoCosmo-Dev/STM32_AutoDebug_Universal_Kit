@@ -130,12 +130,7 @@ cd STM32_AutoDebug_Universal_Kit
 **已有 Keil 工程**：把工程文件夹拖到 `inject_to_project.bat` 上。
 
 ```
-  [+] AGENTS.md（通用约定 · Codex CLI / Zed / Jules / Cursor 新版）
-  [+] CLAUDE.md（Claude Code）
-  [+] .cursorrules（Cursor）
-  [+] .windsurfrules（Windsurf）
-  [+] .clinerules（Cline / Roo Code）
-  [+] .github\copilot-instructions.md（GitHub Copilot）
+  [+] AGENTS.md（AI 规范，开场白里让 AI 读它即可）
   [+] run_autodebug.py
   [+] autodebug/ 引擎
   [+] autodebug.config.yaml（本工程配置）
@@ -143,7 +138,7 @@ cd STM32_AutoDebug_Universal_Kit
   找到 Keil 工程：MDK-ARM\Demo.uvprojx
 ```
 
-同一份规范会落到各家自动加载的路径上。已存在且不是本套件生成的文件会被**保留不覆盖**，只提示你自行加一行指向 `AGENTS.md`。
+规范只有 `AGENTS.md` 一个文件（已存在且不是本套件生成的会保留不覆盖）。不生成 `.cursorrules`、`.clinerules` 这类各家专属副本 —— 同一份内容散成六份只会互相不同步。
 
 **还没有工程**：先弄出一个能编译的 `.uvprojx` 再注入 —— STM32CubeMX 生成、板厂例程改、或 GitHub 上的 HAL 模板都行。本套件不负责建工程，它接管的是「有工程之后」的全部环节。
 
@@ -158,9 +153,9 @@ cd STM32_AutoDebug_Universal_Kit
 我想做：<你的需求，说人话即可>
 ```
 
-**不挑编辑器**：本套件不依赖任何一家的规则加载机制 —— 开场白第一句就是"读一下 AGENTS.md"，
-所以**任何能读文件 + 能跑终端命令的 AI** 都能驱动它（Trae、通义灵码、CodeBuddy、Continue、Aider、
-自建 Agent 都一样）。注入的那几个规则文件只是让支持自动加载的编辑器省掉这一句话。
+**不挑编辑器**：规范只有 `AGENTS.md` 一个文件，靠开场白那句"读一下 AGENTS.md"生效，
+不依赖任何一家的规则自动加载机制。所以**任何能读文件 + 能跑终端命令的 AI** 都能驱动它 ——
+Claude Code、Cursor、Windsurf、Cline、Trae、通义灵码、Copilot、Aider、自建 Agent 一视同仁。
 
 之后的流程：
 
@@ -257,7 +252,7 @@ void cm_backtrace_putchar(char c)                 /* 弱符号，直接实现即
 ├── inject_to_project.bat / .py # 工程注入器
 ├── run_autodebug.py            # 闭环运行器（退出码即契约）
 ├── mcp_server.py               # MCP stdio 服务端（7 个工具）
-├── AGENTS.md                   # AI 开发规范（注入时同时生成 .cursorrules / CLAUDE.md）
+├── AGENTS.md                   # AI 开发规范（唯一的规则文件，注入到工程里）
 ├── docs/ADVANCED.md            # 闭环时序、完整配置、MCP、架构、v2.0 修复清单
 ├── autodebug/                  # 引擎：编译 / 烧录 / 串口 / 故障分析 / 符号解析 / 报告 / 编排
 ├── mcu_support/                # cm_backtrace_lite：固件侧崩溃追踪器 + HardFault 汇编胶水
