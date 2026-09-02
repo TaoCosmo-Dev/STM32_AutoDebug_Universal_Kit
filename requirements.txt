@@ -1,9 +1,6 @@
 # STM32 AutoDebug Universal Kit - Python dependencies
 # Install: pip install -r requirements.txt
 #   (setup_env.bat / setup_env.ps1 do this for you, via a fast mirror)
-#
-# The promo-video renderer has its own, much heavier dependency set:
-#   pip install -r requirements-video.txt
 
 pyocd>=0.36          # SWD/JTAG flashing, halt/resume, core & SCB register access
 pyelftools>=0.30     # DWARF line tables: address -> source file:line
