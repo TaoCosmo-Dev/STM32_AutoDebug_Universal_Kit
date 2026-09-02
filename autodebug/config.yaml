@@ -1,28 +1,49 @@
-# STM32 Auto-Debug & Self-Healing Pipeline Configuration
+# STM32 Auto-Debug & Self-Healing Pipeline - default configuration
+#
+# Every path below may be left as `null`: the kit auto-detects it on this machine.
+# A path that IS set but does not exist falls back to auto-detection automatically,
+# so this file stays portable across PCs. Copy it to your project root as
+# `autodebug.config.yaml` to override per project.
+
 keil:
-  uv4_path: "D:\\keil5\\UV4\\UV4.exe"
-  fromelf_path: "D:\\keil5\\ARM\\ARMCC\\bin\\fromelf.exe"
+  uv4_path: null          # null = registry + common-dir + PATH auto-detection
+  fromelf_path: null      # null = resolved next to UV4.exe
 
 debugger:
-  type: "pyocd"          # Options: "pyocd", "jlink", "gdb"
-  target_override: null  # Target chip (null = auto-detect from .uvprojx)
-  probe_id: null         # Probe serial number (null = auto-detect first active probe)
-  jlink_path: "C:\\Program Files\\SEGGER\\JLink\\JLink.exe"
-  jlink_gdb_server: "C:\\Program Files\\SEGGER\\JLink\\JLinkGDBServerCL.exe"
+  type: "pyocd"           # "pyocd" | "jlink"
+  target_override: null   # null = auto-detected from the .uvprojx <Device> tag
+  probe_id: null          # null = first connected probe, never prompts
+  frequency_hz: 4000000
+  connect_mode: "under-reset"   # survives firmware that reconfigures the SWD pins
+
+build:
+  timeout_seconds: 600    # a cold full rebuild of a HAL project blows past 120s
+  rebuild: false          # false = incremental (-b), true = full rebuild (-r)
+  kill_uv4_on_timeout: true
+  fail_on_stale_axf: true # never flash an image the current build did not produce
 
 serial:
-  port: null             # Serial port (null = auto-detect USB-UART COM port)
+  port: null              # null = auto-sniff the USB-UART COM port
   baudrate: 115200
-  timeout_seconds: 10    # Timeout waiting for test result or assert
+  timeout_seconds: 15     # capture window for the pass/fail token
+  boot_grace_seconds: 0.2
 
 test:
   max_repair_iterations: 5
   pass_keywords:
     - "[ALL TESTS PASSED]"
     - "TESTS_PASSED"
-    - "OK (all tests passed)"
+    - "[PASS]"
   fail_keywords:
     - "[TEST FAILED]"
     - "ASSERTION_FAILED"
-    - "HardFault_Handler"
-    - "cm_backtrace"
+    - "[AUTODEBUG_CRASH_START]"
+  crash_begin_marker: "[AUTODEBUG_CRASH_START]"
+  crash_end_marker: "[AUTODEBUG_CRASH_END]"
+
+loop:
+  git_snapshot: true      # commit a restore point before each AI patch
+  archive_reports: true   # keep .autodebug/iter_NN_*.json for every iteration
+  archive_dir: ".autodebug"
+  stall_threshold: 2      # identical failure twice in a row -> stop and escalate
+  halt_target_on_finish: false

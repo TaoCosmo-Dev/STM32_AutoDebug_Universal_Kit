@@ -46,3 +46,8 @@ ENV/
 # Temporary test logs
 diagnostic_report.json
 *.tmp
+
+# AutoDebug artifacts
+build_autodebug.log
+.autodebug/
+autodebug.config.yaml

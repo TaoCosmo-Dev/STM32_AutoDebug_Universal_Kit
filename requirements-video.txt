@@ -1,0 +1,10 @@
+# Dependencies for make_stm32_video.py (the promo-video renderer / CI job only).
+# Kept separate from requirements.txt so installing the debug kit on a dev machine
+# does not drag in moviepy, ffmpeg bindings and a pinned numpy.
+
+edge-tts>=6.1.10
+moviepy==1.0.3
+pillow>=10.0.0
+numpy<2.0.0
+requests>=2.31.0
+imageio-ffmpeg>=0.4.9
