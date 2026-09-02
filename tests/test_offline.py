@@ -8,8 +8,11 @@ log parsing, fault decoding, crash-dump parsing and port selection. These are ex
 the places where a silent regression would make the pipeline lie about success.
 """
 import os
+import shutil
 import sys
+import tempfile
 import unittest
+import xml.etree.ElementTree as ET
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -195,6 +198,92 @@ class TestPortSelection(unittest.TestCase):
 
     def test_stlink_vcp_is_preferred(self):
         self.assertGreater(score_port("STMicroelectronics STLink Virtual COM Port", "", self.cfg), 0)
+
+
+class TestProjectSelfRepair(unittest.TestCase):
+    """The kit edits .uvprojx itself, so nobody has to open the Keil IDE to tick a box."""
+
+    TPL = """<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<Project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <Targets>
+    <Target>
+      <TargetName>App</TargetName>
+      <TargetOption><TargetCommonOption>
+          <OutputName>App</OutputName>
+          <CreateExecutable>1</CreateExecutable>
+          <DebugInformation>0</DebugInformation>
+      </TargetCommonOption></TargetOption>
+    </Target>
+    <Target>
+      <TargetName>Release</TargetName>
+      <TargetOption><TargetCommonOption>
+          <OutputName>Rel</OutputName>
+          <CreateExecutable>1</CreateExecutable>
+          <DebugInformation>0</DebugInformation>
+      </TargetCommonOption></TargetOption>
+    </Target>
+  </Targets>
+</Project>
+"""
+
+    DEBUG_OFF = "<DebugInformation>0</DebugInformation>"
+    DEBUG_ON = "<DebugInformation>1</DebugInformation>"
+
+    def setUp(self):
+        self.builder = KeilBuilder(uv4_path=None, build_config=BuildConfig())
+        self.dir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+    def write(self, text):
+        path = os.path.join(self.dir, "App.uvprojx")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(text)
+        return path
+
+    def read(self, path):
+        with open(path, encoding="utf-8") as f:
+            return f.read()
+
+    def test_debug_information_is_switched_on(self):
+        path = self.write(self.TPL)
+        self.assertIsNotNone(self.builder.ensure_debug_information(path, "App"))
+        app_block = self.read(path).split("<TargetName>Release")[0]
+        self.assertIn(self.DEBUG_ON, app_block)
+
+    def test_other_targets_are_left_alone(self):
+        path = self.write(self.TPL)
+        self.builder.ensure_debug_information(path, "App")
+        release_block = self.read(path).split("<TargetName>Release")[1]
+        self.assertIn(self.DEBUG_OFF, release_block)
+
+    def test_all_targets_when_none_named(self):
+        path = self.write(self.TPL)
+        note = self.builder.ensure_debug_information(path)
+        self.assertIn("App", note)
+        self.assertIn("Release", note)
+        self.assertEqual(self.read(path).count(self.DEBUG_ON), 2)
+
+    def test_already_enabled_leaves_the_file_byte_identical(self):
+        path = self.write(self.TPL.replace(self.DEBUG_OFF, self.DEBUG_ON))
+        before = self.read(path)
+        self.assertIsNone(self.builder.ensure_debug_information(path, "App"))
+        self.assertEqual(before, self.read(path))
+
+    def test_missing_tag_is_inserted(self):
+        stripped = self.TPL.replace("          " + self.DEBUG_OFF + chr(10), "", 1)
+        path = self.write(stripped)
+        self.assertIsNotNone(self.builder.ensure_debug_information(path, "App"))
+        app_block = self.read(path).split("<TargetName>Release")[0]
+        self.assertIn(self.DEBUG_ON, app_block)
+
+    def test_result_is_valid_xml_header_kept_and_backed_up(self):
+        path = self.write(self.TPL)
+        self.builder.ensure_debug_information(path, "App")
+        ET.parse(path)                                    # raises if we corrupted the XML
+        self.assertTrue(os.path.exists(path + ".autodebug.bak"))
+        self.assertTrue(self.read(path).startswith('<?xml version="1.0"'))
 
 
 class TestConfigResilience(unittest.TestCase):

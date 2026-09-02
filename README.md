@@ -85,10 +85,14 @@ AI 写嵌入式代码的瓶颈不是不会写，而是**没有反馈**：它看�
 | 项 | 说明 |
 |---|---|
 | Python ≥ 3.10 | 安装时勾选 `Add python.exe to PATH` |
-| Keil MDK5 | AC5 / AC6 均支持；工程需勾选 Output → Debug Information（否则拿不到源码行）|
-| AI 编辑器 | [Claude Code](https://claude.com/claude-code) 或 [Cursor](https://cursor.com) |
+| Keil MDK5 | AC5 / AC6 均支持。**装完就不用再打开它了** —— 编译由本套件走 UV4 命令行驱动 |
+| AI 编辑器 | Claude Code / Cursor / Windsurf / Cline / Roo Code / GitHub Copilot / Codex CLI / Trae / 通义灵码 / Aider 等均可，见下 |
 
 > 目前仅 Windows。核心依赖 Keil MDK，暂无 Mac / Linux 版。
+
+**关于 Keil 工程设置**：崩溃定位到源码行需要工程输出调试信息（Keil GUI 里的 Output → Debug Information）。
+这一项本质上只是 `.uvprojx` 里的一个 XML 标签，**本套件在每次编译前会自动检测并打开它**（原工程自动备份为
+`*.uvprojx.autodebug.bak`）。你不需要为此打开 uVision。要关掉这个行为：`build.auto_fix_debug_info: false`。
 
 ---
 
@@ -126,15 +130,20 @@ cd STM32_AutoDebug_Universal_Kit
 **已有 Keil 工程**：把工程文件夹拖到 `inject_to_project.bat` 上。
 
 ```
-  [+] AGENTS.md（AI 规范）
-  [+] .cursorrules（Cursor / Windsurf 用）
-  [+] CLAUDE.md（Claude Code 会自动读）
+  [+] AGENTS.md（通用约定 · Codex CLI / Zed / Jules / Cursor 新版）
+  [+] CLAUDE.md（Claude Code）
+  [+] .cursorrules（Cursor）
+  [+] .windsurfrules（Windsurf）
+  [+] .clinerules（Cline / Roo Code）
+  [+] .github\copilot-instructions.md（GitHub Copilot）
   [+] run_autodebug.py
   [+] autodebug/ 引擎
   [+] autodebug.config.yaml（本工程配置）
   [+] mcu_support/cm_backtrace_lite.c
   找到 Keil 工程：MDK-ARM\Demo.uvprojx
 ```
+
+同一份规范会落到各家自动加载的路径上。已存在且不是本套件生成的文件会被**保留不覆盖**，只提示你自行加一行指向 `AGENTS.md`。
 
 **还没有工程**：先弄出一个能编译的 `.uvprojx` 再注入 —— STM32CubeMX 生成、板厂例程改、或 GitHub 上的 HAL 模板都行。本套件不负责建工程，它接管的是「有工程之后」的全部环节。
 
@@ -148,6 +157,10 @@ cd STM32_AutoDebug_Universal_Kit
 读一下 AGENTS.md，按里面的规范来。
 我想做：<你的需求，说人话即可>
 ```
+
+**不挑编辑器**：本套件不依赖任何一家的规则加载机制 —— 开场白第一句就是"读一下 AGENTS.md"，
+所以**任何能读文件 + 能跑终端命令的 AI** 都能驱动它（Trae、通义灵码、CodeBuddy、Continue、Aider、
+自建 Agent 都一样）。注入的那几个规则文件只是让支持自动加载的编辑器省掉这一句话。
 
 之后的流程：
 
@@ -231,7 +244,7 @@ void cm_backtrace_putchar(char c)                 /* 弱符号，直接实现即
 | 退出码 2，连不上目标 | 固件复用了 SWD 引脚，或芯片读保护 | 保持 `connect_mode: under-reset`；RDP1 需整片擦除解锁 |
 | 退出码 4，串口零字节 | 串口重定向未实现 / 波特率不符 / COM 被串口助手占用 | 实现 `fputc`；核对 115200；关掉 SSCOM 等 |
 | 退出码 4，有输出无令牌 | 测试没走到输出点 | 看报告里的 **CPU 存活遥测**：PC 不变 = 卡在某个死等循环 |
-| 崩溃了但无源码行 | Keil 未输出调试信息 | Options → Output 勾选 Debug Information |
+| 崩溃了但无源码行 | 工程未输出调试信息 | 正常会被自动打开；若关了 `auto_fix_debug_info`，需手工把 `.uvprojx` 的 `<DebugInformation>` 置 1 |
 | 报告写"故障地址无效" | imprecise 总线错误（写缓冲延迟） | 在可疑写操作后加 `__DSB()` 缩小范围 |
 | 连续几轮同一个错 | 上一次修改没生效 | 报告的 `repeated_failure` 会为 true，换思路而不是重复同类改动 |
 
@@ -263,6 +276,8 @@ void cm_backtrace_putchar(char c)                 /* 弱符号，直接实现即
 - **BFAR/MMFAR 全链路贯通并按 CFSR 有效位判定。** 有地址才敢说"空指针"，无效时如实写"无效"，不猜。
 - **pyOCD 全程 `blocking=False` + 单会话。** 桌上插两个探针不会弹选择菜单卡死；
   也不会因为重连（under-reset）把刚要读的 CFSR 擦掉。
+- **工程自修复。** 编译前直接改 `.uvprojx` 打开 `<DebugInformation>`，没它就没有 DWARF 行表，
+  崩溃永远定位不到行 —— 但这不该逼用户去开 uVision 勾一个框。改动前自动备份，且只动当前 target。
 - **护栏**：每轮改动前 `git stash create` 打还原点（不动工作区）；失败签名连续重复即停机交人工。
 
 细节见 [docs/ADVANCED.md](docs/ADVANCED.md)。

@@ -1,6 +1,6 @@
 # 进阶手册 · STM32 AutoDebug Universal Kit
 
-> 面向工程师。小白入门请看 [README](../README.md)，那边全程无需命令行。
+> 安装与日常使用看 [README](../README.md)；这里是实现细节、完整配置与排错深水区。
 
 ## 目录
 
@@ -82,7 +82,7 @@ graph TD
   "success": false,
   "exit_code": 3,
   "report_path": "MDK-ARM/diagnostic_report.json",
-  "summary": "NULL Pointer Dereference: Access to NULL or a near-zero offset at 0x00000004.",
+  "summary": "空指针解引用（NULL Pointer Dereference）：程序访问了 NULL 或接近 0 的地址 0x00000004。",
   "signature": "FAULT|HardFault|PC=0x08000B12|CFSR=0x00008200",
   "repeated_failure": false,
   "next_actions": ["空指针解引用。检查该地址附近的结构体指针是否在使用前完成初始化 ..."]
@@ -233,7 +233,7 @@ HAL 的 `assert_param` 与 C99 `assert` 格式同样能被解析。
 # STM32 运行时硬件故障深度诊断报告（迭代 2）
 **故障类型**: `HardFault`
 **数据来源**: 固件 UART 自述
-**根本原因**: NULL Pointer Dereference: Access to NULL or a near-zero offset at 0x00000004.
+**根本原因**: 空指针解引用（NULL Pointer Dereference）：程序访问了 NULL 或接近 0 的地址 0x00000004。
 
 ## 2. SCB 故障状态寄存器
 - **CFSR**: `0x00008200`
@@ -287,6 +287,7 @@ build:
   rebuild: false          # false = 增量(-b)，true = 全量(-r)
   kill_uv4_on_timeout: true   # 弹模态框卡死时杀掉 UV4，避免锁死工程
   fail_on_stale_axf: true     # 本次没生成新镜像就判失败
+  auto_fix_debug_info: true   # 编译前自动在 .uvprojx 里置 <DebugInformation>1（备份为 *.autodebug.bak）
   log_encodings: ["utf-8", "gbk", "cp936", "latin-1"]
 
 serial:
@@ -345,7 +346,7 @@ UART 崩溃块解析、断言三种格式、串口打分、配置回退。**这�
 | 模块 | 职责 |
 |---|---|
 | `autodebug/config.py` | 配置 + 工具链/探针自动探测（路径写错自动回退）|
-| `autodebug/builder.py` | Keil UV4 驱动、ARMCC/ARMCLANG/链接器日志解析、产物新鲜度校验、超时杀进程 |
+| `autodebug/builder.py` | Keil UV4 驱动、ARMCC/ARMCLANG/链接器日志解析、产物新鲜度校验、超时杀进程、`.uvprojx` 调试信息自修复 |
 | `autodebug/hardware_probe.py` | pyOCD/J-Link：单会话、零交互、halt/resume、SCB 读取、异常栈帧扫描、CPU 存活遥测 |
 | `autodebug/serial_monitor.py` | 后台线程串口捕获、端口打分嗅探、令牌判定、崩溃块与断言解析 |
 | `autodebug/fault_analyzer.py` | CFSR/HFSR 位解码、栈帧还原、根因分类、中文修复建议 |
@@ -365,7 +366,7 @@ UART 崩溃块解析、断言三种格式、串口打分、配置回退。**这�
 | 退出码 2，连不上目标 | 固件把 SWD 引脚复用了 / 芯片读保护 | 保持 `connect_mode: under-reset`；RDP1 需整片擦除解锁 |
 | 退出码 4，串口零字节 | 串口重定向未实现 / 波特率不符 / COM 口被占 | 实现 `fputc`；核对 115200；关掉串口助手 |
 | 退出码 4，有输出但没令牌 | 测试没跑到输出点 | 看报告里的 **CPU 存活遥测**：PC 不变 = 卡在某个死等循环 |
-| 崩溃了但没有源码行 | Keil 未输出调试信息 | Options → Output 勾选 Debug Information |
+| 崩溃了但没有源码行 | 工程未输出调试信息 | 默认会被自动修复；若关了 `auto_fix_debug_info`，需手工将 `.uvprojx` 的 `<DebugInformation>` 置 1 |
 | 链接报 `HardFault_Handler` 重复定义 | HAL 的空实现还在 | 删掉 `stm32xxxx_it.c` 里的那个 |
 | 报告里"故障地址：无效" | imprecise 总线错误（写缓冲延迟）| 在可疑写操作后加 `__DSB()` 定位 |
 

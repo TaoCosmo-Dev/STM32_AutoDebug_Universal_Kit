@@ -156,6 +156,8 @@ class BuildConfig:
     log_encodings: List[str] = field(default_factory=lambda: ["utf-8", "gbk", "cp936", "latin-1"])
     kill_uv4_on_timeout: bool = True     # a modal Keil dialog would otherwise lock the project
     fail_on_stale_axf: bool = True       # never flash an image this build did not produce
+    auto_fix_debug_info: bool = True     # tick "Output -> Debug Information" in the .uvprojx
+                                         # for us, so nobody has to open the Keil IDE to do it
 
 
 @dataclass

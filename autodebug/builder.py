@@ -138,6 +138,92 @@ class KeilBuilder:
             pass
         return None
 
+
+    # ---------------------------------------------------------------- project self-repair
+
+    _TARGET_BLOCK = re.compile(r"<Target>.*?</Target>", re.S)
+    _TARGET_NAME = re.compile(r"<TargetName>(.*?)</TargetName>", re.S)
+    _DEBUG_INFO_OFF = re.compile(r"(<DebugInformation>)\s*0\s*(</DebugInformation>)")
+    _CREATE_EXE = re.compile(r"(\s*)<CreateExecutable>")
+
+    @classmethod
+    def _read_project_text(cls, uvprojx_path: str) -> Optional[str]:
+        try:
+            with open(uvprojx_path, "rb") as f:
+                return f.read().decode("utf-8")
+        except Exception:
+            return None
+
+    @classmethod
+    def _patch_target_block(cls, block: str) -> Tuple[str, bool]:
+        """Turn Debug Information on inside one <Target> block."""
+        patched, count = cls._DEBUG_INFO_OFF.subn(r"\g<1>1\g<2>", block, count=1)
+        if count:
+            return patched, True
+        if "<DebugInformation>" in block:
+            return block, False          # already 1
+        # Tag absent entirely: insert it right before <CreateExecutable>, where Keil keeps it.
+        m = cls._CREATE_EXE.search(block)
+        if not m:
+            return block, False
+        indent = m.group(1)
+        insert = f"{indent}<DebugInformation>1</DebugInformation>"
+        return block[:m.start()] + insert + block[m.start():], True
+
+    def ensure_debug_information(self, uvprojx_path: str,
+                                 target_name: Optional[str] = None) -> Optional[str]:
+        """Make sure the project emits DWARF, by editing the .uvprojx directly.
+
+        "Output -> Debug Information" in the Keil IDE is just <DebugInformation> in the
+        project XML. Without it the image carries no line table, so a HardFault can never
+        be traced back to a source line. Editing the tag here means the whole pipeline
+        stays inside the AI editor - the user never has to open uVision to tick a box.
+
+        Returns a human-readable note when the file was changed, else None.
+        """
+        text = self._read_project_text(uvprojx_path)
+        if text is None:
+            return None
+
+        blocks = list(self._TARGET_BLOCK.finditer(text))
+        if not blocks:
+            return None
+
+        out = []
+        cursor = 0
+        fixed: List[str] = []
+        for m in blocks:
+            block = m.group(0)
+            name_m = self._TARGET_NAME.search(block)
+            name = name_m.group(1).strip() if name_m else ""
+            if target_name and name != target_name:
+                continue
+            new_block, changed = self._patch_target_block(block)
+            if changed:
+                out.append(text[cursor:m.start()])
+                out.append(new_block)
+                cursor = m.end()
+                fixed.append(name or "(unnamed target)")
+        if not fixed:
+            return None
+
+        out.append(text[cursor:])
+        new_text = "".join(out)
+
+        backup = uvprojx_path + ".autodebug.bak"
+        try:
+            if not os.path.exists(backup):
+                with open(backup, "wb") as f:
+                    f.write(text.encode("utf-8"))
+            with open(uvprojx_path, "wb") as f:
+                f.write(new_text.encode("utf-8"))
+        except Exception as e:
+            return f"could not enable Debug Information automatically: {e}"
+
+        return (f"已自动开启调试信息（Debug Information）: {', '.join(fixed)}"
+                f" —— 否则崩溃时无法定位到源码行。原工程已备份为 "
+                f"{os.path.basename(backup)}")
+
     # ---------------------------------------------------------------- build
 
     def _read_log(self, log_file: str) -> str:
@@ -206,6 +292,11 @@ class KeilBuilder:
             print(f"[builder] project has {len(targets)} targets {targets}; "
                   f"building '{targets[0]}'. Pass --target to choose another.", file=sys.stderr)
             target_name = targets[0]
+
+        if self.cfg.auto_fix_debug_info:
+            note = self.ensure_debug_information(uvprojx_path, target_name)
+            if note:
+                print(f"[builder] {note}", file=sys.stderr)
 
         axf_path, hex_path = self.get_output_paths(uvprojx_path, target_name)
         axf_mtime_before = os.path.getmtime(axf_path) if (axf_path and os.path.exists(axf_path)) else None

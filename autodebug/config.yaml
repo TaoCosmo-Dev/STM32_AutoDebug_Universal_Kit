@@ -21,6 +21,7 @@ build:
   rebuild: false          # false = incremental (-b), true = full rebuild (-r)
   kill_uv4_on_timeout: true
   fail_on_stale_axf: true # never flash an image the current build did not produce
+  auto_fix_debug_info: true   # 编译前自动在 .uvprojx 里打开 Debug Information（否则崩溃定位不到源码行）
 
 serial:
   port: null              # null = auto-sniff the USB-UART COM port

@@ -12,6 +12,7 @@ What lands in the target:
     autodebug.config.yaml                  editable per-project config
     mcu_support/                           cm_backtrace_lite crash tracer for the firmware
 """
+import io
 import os
 import shutil
 import sys
@@ -32,6 +33,48 @@ GITIGNORE_LINES = [
     "build_autodebug.log",
     ".autodebug/",
 ]
+
+
+# path -> which tool picks it up. Same content everywhere; only the filename differs.
+RULE_TARGETS = [
+    ("AGENTS.md", "通用约定 · Codex CLI / Zed / Jules / Cursor 新版"),
+    ("CLAUDE.md", "Claude Code"),
+    (".cursorrules", "Cursor"),
+    (".windsurfrules", "Windsurf"),
+    (".clinerules", "Cline / Roo Code"),
+    (os.path.join(".github", "copilot-instructions.md"), "GitHub Copilot"),
+]
+
+# A file we generated earlier contains this; anything else is the user's own and is kept.
+RULES_FINGERPRINT = "STM32 固件自主编程"
+
+
+def _install_rules(target_dir: str) -> None:
+    src = os.path.join(KIT_DIR, "AGENTS.md")
+    if not os.path.exists(src):
+        print("  [!] 套件里缺少 AGENTS.md")
+        return
+    with io.open(src, encoding="utf-8") as f:
+        rules = f.read()
+
+    for rel, tool in RULE_TARGETS:
+        dst = os.path.join(target_dir, rel)
+        if os.path.exists(dst):
+            try:
+                with io.open(dst, encoding="utf-8", errors="replace") as f:
+                    existing = f.read()
+            except Exception:
+                existing = ""
+            if RULES_FINGERPRINT not in existing:
+                print(f"  [=] 已有 {rel}，保留你的版本"
+                      f"（想让 {tool} 自动加载，在里面加一行指向 AGENTS.md）")
+                continue
+        parent = os.path.dirname(dst)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
+        with io.open(dst, "w", encoding="utf-8", newline="\n") as f:
+            f.write(rules)
+        print(f"  [+] {rel}（{tool}）")
 
 
 def _copy_file(rel_src: str, dst: str, label: str) -> bool:
@@ -90,15 +133,10 @@ def inject(target_dir: str) -> bool:
     print(f"  目标工程：{target_dir}")
     print("=" * 63)
 
-    # 1. AI rules -----------------------------------------------------------------
-    _copy_file("AGENTS.md", os.path.join(target_dir, "AGENTS.md"), "AGENTS.md（AI 规范）")
-    _copy_file("AGENTS.md", os.path.join(target_dir, ".cursorrules"), ".cursorrules（Cursor / Windsurf 用）")
-    claude_md = os.path.join(target_dir, "CLAUDE.md")
-    if os.path.exists(claude_md):
-        print("  [=] 已有 CLAUDE.md，保留不动"
-              "（想让 Claude Code 自动加载规范，在里面加一行指向 AGENTS.md 即可）")
-    else:
-        _copy_file("AGENTS.md", claude_md, "CLAUDE.md（Claude Code 会自动读）")
+    # 1. AI rules ------------------------------------------------------------------
+    # Every mainstream agent reads a different file, so drop the same rules at each
+    # well-known path. AGENTS.md is the cross-tool convention; the rest are per-editor.
+    _install_rules(target_dir)
 
     # 2. Runner + engine ----------------------------------------------------------
     _copy_file("run_autodebug.py", os.path.join(target_dir, "run_autodebug.py"), "run_autodebug.py")
