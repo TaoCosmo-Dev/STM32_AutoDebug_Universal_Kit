@@ -37,7 +37,7 @@ GITIGNORE_LINES = [
 def _copy_file(rel_src: str, dst: str, label: str) -> bool:
     src = os.path.join(KIT_DIR, rel_src)
     if not os.path.exists(src):
-        print(f"  [!] missing in kit: {rel_src}")
+        print(f"  [!] 套件里缺少文件：{rel_src}")
         return False
     shutil.copy2(src, dst)
     print(f"  [+] {label}")
@@ -59,7 +59,7 @@ def _merge_gitignore(target_dir: str) -> None:
     try:
         with open(path, "a", encoding="utf-8") as f:
             f.write("\n" + "\n".join(missing) + "\n")
-        print("  [+] .gitignore updated with AutoDebug artifacts")
+        print("  [+] 已在 .gitignore 中忽略 AutoDebug 产物")
     except Exception:
         pass
 
@@ -79,26 +79,26 @@ def find_projects(target_dir: str) -> list:
 def inject(target_dir: str) -> bool:
     target_dir = os.path.abspath(target_dir)
     if not os.path.isdir(target_dir):
-        print(f"[-] Target directory does not exist: {target_dir}")
+        print(f"[-] 目标文件夹不存在：{target_dir}")
         return False
     if os.path.normcase(target_dir) == os.path.normcase(KIT_DIR):
-        print("[-] Refusing to inject the kit into itself.")
+        print("[-] 不能把套件注入到它自己里。")
         return False
 
     print("\n" + "=" * 63)
-    print("  Injecting the STM32 AutoDebug toolchain")
-    print(f"  Target: {target_dir}")
+    print("  正在注入 STM32 全自动开发套件")
+    print(f"  目标工程：{target_dir}")
     print("=" * 63)
 
     # 1. AI rules -----------------------------------------------------------------
-    _copy_file("AGENTS.md", os.path.join(target_dir, "AGENTS.md"), "AGENTS.md (AI rules)")
-    _copy_file("AGENTS.md", os.path.join(target_dir, ".cursorrules"), ".cursorrules (Cursor / Windsurf)")
+    _copy_file("AGENTS.md", os.path.join(target_dir, "AGENTS.md"), "AGENTS.md（AI 规范）")
+    _copy_file("AGENTS.md", os.path.join(target_dir, ".cursorrules"), ".cursorrules（Cursor / Windsurf 用）")
     claude_md = os.path.join(target_dir, "CLAUDE.md")
     if os.path.exists(claude_md):
-        print("  [=] CLAUDE.md already exists, left untouched "
-              "(add a line pointing at AGENTS.md if you want Claude Code to auto-load it)")
+        print("  [=] 已有 CLAUDE.md，保留不动"
+              "（想让 Claude Code 自动加载规范，在里面加一行指向 AGENTS.md 即可）")
     else:
-        _copy_file("AGENTS.md", claude_md, "CLAUDE.md (Claude Code auto-loads this)")
+        _copy_file("AGENTS.md", claude_md, "CLAUDE.md（Claude Code 会自动读）")
 
     # 2. Runner + engine ----------------------------------------------------------
     _copy_file("run_autodebug.py", os.path.join(target_dir, "run_autodebug.py"), "run_autodebug.py")
@@ -107,15 +107,15 @@ def inject(target_dir: str) -> bool:
     if os.path.exists(dst_pkg):
         shutil.rmtree(dst_pkg, ignore_errors=True)
     shutil.copytree(os.path.join(KIT_DIR, "autodebug"), dst_pkg, ignore=IGNORE)
-    print("  [+] autodebug/ engine")
+    print("  [+] autodebug/ 引擎")
 
     # 3. Per-project config (never clobber an edited one) --------------------------
     dst_cfg = os.path.join(target_dir, "autodebug.config.yaml")
     if os.path.exists(dst_cfg):
-        print("  [=] autodebug.config.yaml already exists, kept your version")
+        print("  [=] 已有 autodebug.config.yaml，保留你的版本")
     else:
         _copy_file(os.path.join("autodebug", "config.yaml"), dst_cfg,
-                   "autodebug.config.yaml (per-project settings)")
+                   "autodebug.config.yaml（本工程配置）")
 
     # 4. Firmware-side crash tracer ------------------------------------------------
     dst_mcu = os.path.join(target_dir, "mcu_support")
@@ -131,23 +131,23 @@ def inject(target_dir: str) -> bool:
     print("\n" + "-" * 63)
     if projects:
         rel = os.path.relpath(projects[0], target_dir)
-        print(f"  Keil project found: {rel}")
+        print(f"  找到 Keil 工程：{rel}")
         if len(projects) > 1:
-            print(f"  (+{len(projects) - 1} more; pass --project to pick one)")
-        print("\n  Run the loop:")
+            print(f"  （还有 {len(projects) - 1} 个，用 --project 可指定）")
+        print("\n  跑一次完整闭环：")
         print(f"     python run_autodebug.py --project \"{rel}\"")
     else:
-        print("  No .uvprojx found yet. After generating your Keil project run:")
+        print("  还没有 .uvprojx 工程。生成 Keil 工程后运行：")
         print("     python run_autodebug.py --project \"MDK-ARM/YourProject.uvprojx\"")
 
-    print("\n  To get HardFault auto-diagnosis without a probe:")
-    print("     1. add mcu_support/cm_backtrace_lite.c to the Keil project")
-    print("     2. implement void cm_backtrace_putchar(char c) with a blocking UART write")
-    print("     3. call cm_backtrace_init() at the top of main()")
-    print("     (if the linker reports a duplicate HardFault_Handler, delete the stub")
-    print("      in stm32xxxx_it.c - that one is empty and swallows the crash)")
+    print("\n  想让板子崩溃时自动报出错在哪一行（三步）：")
+    print("     1. 把 mcu_support/cm_backtrace_lite.c 加入 Keil 工程")
+    print("     2. 实现 void cm_backtrace_putchar(char c)，里面阻塞式写串口寄存器")
+    print("     3. 在 main() 最开头调用 cm_backtrace_init()")
+    print("     （若链接报 HardFault_Handler 重复定义，删掉 stm32xxxx_it.c 里")
+    print("      那个空实现 —— 正是它把崩溃吞掉了）")
     print("-" * 63)
-    print(f"\n[SUCCESS] Injection complete. Open {target_dir} in your AI editor.\n")
+    print(f"\n[完成] 注入成功！用你的 AI 编辑器打开 {target_dir}\n")
     return True
 
 
@@ -155,6 +155,6 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         target = sys.argv[1]
     else:
-        print("Drag your project folder onto inject_to_project.bat, or type the path:")
-        target = input("Target project path: ").strip(' "')
+        print("请把工程文件夹拖到 inject_to_project.bat 图标上，或在下方输入路径：")
+        target = input("工程路径：").strip(' "')
     sys.exit(0 if inject(target) else 1)

@@ -60,6 +60,36 @@ class FaultDiagnostics:
         return f"FAULT|{self.fault_type}|PC=0x{pc:08X}|CFSR=0x{self.cfsr:08X}"
 
 
+# Chinese wording for each root cause. The English title is kept in the final string so
+# the report stays searchable and the classification API stays stable.
+_ROOT_CAUSE_ZH = {
+    "Divide by Zero": ("除零", "固件执行了整数除以 0（DIVBYZERO）。"),
+    "Unaligned Memory Access": ("非对齐访存", "对没有对齐的地址做了 16/32 位访问（UNALIGNED）。"),
+    "FPU Not Enabled": ("浮点单元未使能", "在打开 FPU（SCB->CPACR 的 CP10/CP11）之前执行了硬件浮点指令（NOCP）。"),
+    "Undefined Instruction": ("执行了非法指令", "PC 跑到了不是合法指令的地方，常见于函数指针未初始化、被野指针改写，或跳转地址缺少 Thumb 位。"),
+    "Stack Overflow": ("栈溢出", "在保存/恢复异常现场时就出错，栈已耗尽或栈指针被改写（MSTKERR/STKERR）。"),
+    "NULL Pointer Dereference": ("空指针解引用", "程序访问了 NULL 或接近 0 的地址 {addr}。"),
+    "Invalid Bus Access / Wild Pointer": ("野指针 / 非法总线访问", "程序访问了不存在的地址 {addr}。"),
+    "Data Access Violation": ("非法内存读写", "发生了非法读写，但故障地址寄存器未标记为有效。"),
+    "Vector Table Fault": ("向量表读取失败", "取中断向量表出错，核对 SCB->VTOR 与链接起始地址（带 Bootloader 的工程最常见）。"),
+    "Forced HardFault": ("升级而来的 HardFault", "可分类异常在其使能位关闭时升级成了 HardFault。"),
+    "Cortex-M HardFault": ("硬件异常 HardFault", "未能从故障寄存器得到分类信息。"),
+}
+
+
+def localize_root_cause(title: str, explanation: str, fault_address=None) -> str:
+    """Chinese-first root cause, with the English title kept in parentheses."""
+    zh_title, zh_detail = _ROOT_CAUSE_ZH.get(title, (title, explanation))
+    addr = f"0x{fault_address:08X}" if fault_address is not None else "(地址无效)"
+    try:
+        zh_detail = zh_detail.format(addr=addr)
+    except (KeyError, IndexError):
+        pass
+    if zh_title == title:
+        return f"{title}: {explanation}"
+    return f"{zh_title}（{title}）：{zh_detail}"
+
+
 # Root-cause table: (predicate on decoded fields) -> (title, explanation, fix hint)
 _FIX_HINTS = {
     "Divide by Zero":
@@ -268,7 +298,7 @@ class CortexMFaultAnalyzer:
 
         return FaultDiagnostics(
             fault_type="HardFault",
-            root_cause=f"{title}: {explanation}",
+            root_cause=localize_root_cause(title, explanation, fault_address),
             cfsr=cfsr,
             hfsr=hfsr,
             bfar=bfar,

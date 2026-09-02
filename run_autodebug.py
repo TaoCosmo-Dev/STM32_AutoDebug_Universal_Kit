@@ -48,13 +48,13 @@ def find_uvprojx(start_dir: str) -> list:
 
 def cmd_list_devices() -> int:
     probes = list_connected_probes()
-    print("Debug probes:")
+    print("下载器（调试探针）：")
     if probes:
         for p in probes:
             print(f"  - {getattr(p, 'description', '?')}  [{p.unique_id}]")
     else:
-        print("  (none detected)")
-    print("\nSerial ports:")
+        print("  （未检测到，请检查 USB 是否插好）")
+    print("\n串口：")
     ports = SerialMonitor.describe_ports()
     for p in ports or ["  (none detected)"]:
         print(f"  - {p}" if ports else p)
@@ -91,15 +91,15 @@ def main() -> int:
     if not proj_path:
         candidates = find_uvprojx(os.getcwd())
         if not candidates:
-            print("[ERROR] No .uvprojx found under the current directory. "
-                  "Use --project <path>.", file=sys.stderr)
+            print("[错误] 当前目录下找不到 Keil 工程（.uvprojx）。"
+                  "请用 --project <路径> 指定。", file=sys.stderr)
             return EXIT_CODES[STATUS_CONFIG_ERROR]
         proj_path = candidates[0]
         if len(candidates) > 1:
-            print(f"[!] {len(candidates)} Keil projects found; using {proj_path}. "
-                  f"Use --project to choose another.", file=sys.stderr)
+            print(f"[!] 找到 {len(candidates)} 个 Keil 工程，使用 {proj_path}。"
+                  f"要换一个请用 --project 指定。", file=sys.stderr)
     if not os.path.exists(proj_path):
-        print(f"[ERROR] Project not found: {proj_path}", file=sys.stderr)
+        print(f"[错误] 工程文件不存在：{proj_path}", file=sys.stderr)
         return EXIT_CODES[STATUS_CONFIG_ERROR]
 
     # ---- config with CLI overrides ---------------------------------------------------
@@ -138,9 +138,9 @@ def main() -> int:
             }, indent=2, ensure_ascii=False))
         else:
             if res.success:
-                print(f"[+] BUILD OK  0 Error(s), {len(res.warnings)} Warning(s)  -> {res.axf_path}")
+                print(f"[+] 编译通过  0 Error，{len(res.warnings)} Warning  -> {res.axf_path}")
             else:
-                print(f"[-] BUILD FAILED: {res.failure_reason}")
+                print(f"[-] 编译失败：{res.failure_reason}")
                 for e in res.errors[:20]:
                     print(f"    {e.file_path}:{e.line_number} {e.error_code} {e.message}")
         return 0 if res.success else 1
@@ -166,14 +166,14 @@ def main() -> int:
 
     print("\n" + "=" * 63)
     if result.success:
-        print("  [AUTODEBUG PASS] 编译 0 Error + 探针烧录 + 实机串口验收 全部通过")
+        print("  [AUTODEBUG PASS] 编译 + 烧录 + 实机验收 全部通过")
     else:
-        print(f"  [AUTODEBUG FAIL] status={result.final_status}  (exit {result.exit_code})")
+        print(f"  [AUTODEBUG FAIL] 状态={result.final_status}（退出码 {result.exit_code}）")
         if report:
             print(f"  原因: {report.summary}")
             if report.repeated_failure:
                 print("  ⚠ 与上一轮完全相同的失败，上一次修改没有起效，请换思路。")
-            print(f"  完整诊断报告: {result.report_path}")
+            print(f"  完整诊断报告：{result.report_path}")
             print("\n" + report.ai_repair_prompt)
     print("=" * 63)
     return result.exit_code
