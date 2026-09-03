@@ -32,6 +32,7 @@ GITIGNORE_LINES = [
     "diagnostic_report.json",
     "build_autodebug.log",
     ".autodebug/",
+    "*.autodebug.bak",
 ]
 
 
