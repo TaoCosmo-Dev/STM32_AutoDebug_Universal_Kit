@@ -81,6 +81,28 @@ def main() -> int:
     parser.add_argument("--json", action="store_true", help="Print a machine-readable summary")
     parser.add_argument("--quiet", action="store_true", help="Suppress the streaming log")
     parser.add_argument("--list-devices", action="store_true", help="List probes and COM ports")
+
+    project_edits = parser.add_argument_group(
+        "project edits", "Change the Keil project from the command line, so nothing needs "
+                         "the uVision GUI")
+    project_edits.add_argument("--add-source", nargs="+", metavar="FILE",
+                               help="Add source file(s) to the project (a .c the AI just wrote "
+                                    "is invisible to the linker until this runs)")
+    project_edits.add_argument("--add-include", nargs="+", metavar="DIR",
+                               help="Add include path(s)")
+    project_edits.add_argument("--add-define", nargs="+", metavar="NAME",
+                               help="Add preprocessor define(s)")
+    project_edits.add_argument("--group", default="AutoDebug",
+                               help="Group name for --add-source (default: AutoDebug)")
+    project_edits.add_argument("--install-tracer", action="store_true",
+                               help="Install the crash tracer: copy it in, register it with "
+                                    "Keil, add the include path, and neutralise the HAL fault stub")
+    project_edits.add_argument("--uart", metavar="USARTx",
+                               help="With --install-tracer: generate a blocking putchar on this port")
+    project_edits.add_argument("--family", metavar="f1|f4|g0|g4|h7|...",
+                               help="With --install-tracer: chip family (default: from the .uvprojx)")
+    project_edits.add_argument("--check-firmware", action="store_true",
+                               help="Report which firmware-side obligations are still unmet")
     args = parser.parse_args()
 
     if args.list_devices:
@@ -101,6 +123,47 @@ def main() -> int:
     if not os.path.exists(proj_path):
         print(f"[错误] 工程文件不存在：{proj_path}", file=sys.stderr)
         return EXIT_CODES[STATUS_CONFIG_ERROR]
+
+    # ---- project edits (no uVision needed) -------------------------------------------
+    edited = False
+    if args.add_source or args.add_include or args.add_define:
+        from autodebug.project_editor import KeilProjectEditor
+        editor = KeilProjectEditor(proj_path)
+        if args.add_source:
+            editor.add_sources(args.add_source, group=args.group, target_name=args.target)
+        if args.add_include:
+            editor.add_include_paths(args.add_include, target_name=args.target)
+        if args.add_define:
+            editor.add_defines(args.add_define, target_name=args.target)
+        result = editor.save()
+        print(f"[project] {result.summary()}")
+        edited = True
+
+    if args.install_tracer:
+        from autodebug.builder import KeilBuilder
+        from autodebug.firmware_setup import install_crash_tracer
+        mcu = args.mcu or KeilBuilder(None).get_device_name(proj_path)
+        result = install_crash_tracer(proj_path, target_name=args.target,
+                                      uart=args.uart, family=args.family, mcu=mcu)
+        for note in result.notes:
+            print(f"[tracer] {note}")
+        edited = True
+
+    if args.check_firmware:
+        from autodebug.firmware_setup import check_firmware_contract
+        problems = check_firmware_contract(os.path.dirname(os.path.dirname(
+            os.path.abspath(proj_path))))
+        if problems:
+            print("[firmware] 还差这些，闭环才能给出根因：")
+            for i, problem in enumerate(problems, 1):
+                print(f"  {i}. {problem}")
+        else:
+            print("[firmware] 固件侧契约已满足：通过令牌 + 崩溃自述 + 输出通道")
+        edited = True
+
+    if edited:
+        # Project edits are a standalone action - they never implicitly start a build.
+        return 0
 
     # ---- config with CLI overrides ---------------------------------------------------
     config = AutoDebugConfig.load(args.config)

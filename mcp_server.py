@@ -182,6 +182,45 @@ def tool_inject(args: Dict[str, Any]) -> Dict[str, Any]:
     return {"injected": ok, "target": args["target_dir"]}
 
 
+def tool_project_edit(args):
+    from autodebug.project_editor import KeilProjectEditor
+    editor = KeilProjectEditor(args["project_path"])
+    target = args.get("target")
+    if args.get("sources"):
+        editor.add_sources(args["sources"], group=args.get("group", "AutoDebug"),
+                           target_name=target)
+    if args.get("include_paths"):
+        editor.add_include_paths(args["include_paths"], target_name=target)
+    if args.get("defines"):
+        editor.add_defines(args["defines"], target_name=target)
+    if args.get("debug_information", True):
+        editor.set_debug_information(target_name=target)
+    result = editor.save()
+    return {"changed": result.changed, "notes": result.notes,
+            "backup": result.backup_path, "targets": editor.target_names()}
+
+
+def tool_install_tracer(args):
+    from autodebug.builder import KeilBuilder
+    from autodebug.firmware_setup import install_crash_tracer
+    project = args["project_path"]
+    mcu = args.get("mcu") or KeilBuilder(None).get_device_name(project)
+    result = install_crash_tracer(project, target_name=args.get("target"),
+                                  uart=args.get("uart"), family=args.get("family"), mcu=mcu)
+    return {"changed": result.changed, "notes": result.notes, "backup": result.backup_path}
+
+
+def tool_check_firmware(args):
+    import os as _os
+    from autodebug.firmware_setup import check_firmware_contract
+    root = args.get("project_root")
+    if not root:
+        project = _os.path.abspath(args["project_path"])
+        root = _os.path.dirname(_os.path.dirname(project))
+    problems = check_firmware_contract(root, args.get("pass_keywords"))
+    return {"satisfied": not problems, "problems": problems}
+
+
 TOOLS: List[Dict[str, Any]] = [
     {
         "name": "stm32_list_devices",
@@ -272,6 +311,62 @@ TOOLS: List[Dict[str, Any]] = [
             "required": ["axf_path", "address"],
         },
         "handler": tool_diagnose_address,
+    },
+    {
+        "name": "stm32_project_edit",
+        "description": "Edit the Keil project without the uVision GUI: add source files, "
+                       "include paths and defines. A .c you just wrote is invisible to the "
+                       "linker until it is added here - call this after creating any new source file.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project_path": {"type": "string", "description": "Path to the .uvprojx"},
+                "sources": {"type": "array", "items": {"type": "string"},
+                            "description": "Source files to add (.c/.cpp/.s)"},
+                "include_paths": {"type": "array", "items": {"type": "string"}},
+                "defines": {"type": "array", "items": {"type": "string"}},
+                "group": {"type": "string", "description": "Keil group name (default AutoDebug)"},
+                "target": {"type": "string"},
+                "debug_information": {"type": "boolean",
+                                      "description": "Keep DWARF output on (default true)"},
+            },
+            "required": ["project_path"],
+        },
+        "handler": tool_project_edit,
+    },
+    {
+        "name": "stm32_install_tracer",
+        "description": "Wire the crash tracer into a project in one call: copy "
+                       "cm_backtrace_lite in, generate a blocking UART putchar for the given "
+                       "port, register everything with Keil, and comment out the empty HAL "
+                       "fault handler that would otherwise swallow the crash. Idempotent.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project_path": {"type": "string"},
+                "uart": {"type": "string", "description": "e.g. USART1 - the port the app already inits"},
+                "family": {"type": "string", "description": "f1/f4/g0/g4/h7 ... (default: from the .uvprojx)"},
+                "mcu": {"type": "string"},
+                "target": {"type": "string"},
+            },
+            "required": ["project_path"],
+        },
+        "handler": tool_install_tracer,
+    },
+    {
+        "name": "stm32_check_firmware",
+        "description": "Report which firmware-side obligations are still unmet (pass token "
+                       "printed, cm_backtrace_init called, putchar implemented). Run this "
+                       "before the first closed loop so a silent run is not mistaken for a bug.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project_path": {"type": "string"},
+                "project_root": {"type": "string"},
+                "pass_keywords": {"type": "array", "items": {"type": "string"}},
+            },
+        },
+        "handler": tool_check_firmware,
     },
     {
         "name": "stm32_inject",

@@ -75,26 +75,61 @@ python run_autodebug.py --project "MDK-ARM/YourProject.uvprojx"
 
 ---
 
-## 3. 让闭环真正能自愈：固件侧必须做的三件事
+## 3. 工程结构由你改，不要让用户开 Keil
 
-没有这三步，脚本只能告诉你「超时了」，给不出根因。
+用户只负责提需求、回答硬件参数、插杜邦线。**凡是能用命令完成的，都必须你自己做**，
+严禁把「去 Keil 里勾一下 / 把文件加进工程」这类话丢给用户。
 
-1. **通过令牌**：测试通过路径上必须打印 `[ALL TESTS PASSED]`（或 `TESTS_PASSED` / `[PASS]`）。
-2. **崩溃自述**：把 `mcu_support/cm_backtrace_lite.c` 加入 Keil 工程，`main()` 开头调用 `cm_backtrace_init()`，并实现阻塞式字节输出：
+### 3.1 新建源文件后必须注册到工程
 
-   ```c
-   void cm_backtrace_putchar(char c)
-   {
-       while (!(USART1->SR & USART_SR_TXE)) { }   /* F1/F4 用 SR，G0/G4/H7 用 ISR */
-       USART1->DR = (uint8_t)c;
-   }
-   ```
+你写的 `.c` 在加入 `.uvprojx` 之前对链接器不存在，必然报 `L6218E: Undefined symbol`：
 
-   **严禁**在故障处理里用 `printf` / `HAL_UART_Transmit`：它们的超时依赖 SysTick，而 HardFault 优先级 -1 时 SysTick 进不了中断，tick 永不递增，处理函数会在吐出第一个字节前就死锁。
+```bash
+python run_autodebug.py --project MDK-ARM/App.uvprojx --add-source User/dht11.c --add-include User
+```
 
-   若链接器报 `HardFault_Handler` 重复定义，删掉 `stm32xxxx_it.c` 里那个空实现（正是它把崩溃吞掉了）。
+| 需要 | 命令 |
+|---|---|
+| 加源文件 | `--add-source a.c b.c`（可加 `--group 组名`） |
+| 加包含路径 | `--add-include Drivers/Inc` |
+| 加宏定义 | `--add-define USE_FULL_ASSERT` |
 
-3. **断言**：用 `AUTO_ASSERT(expr)`，它输出的格式脚本能直接解析成 `文件:行号`。
+以上均**幂等**，重复执行不会重复添加；首次改动会自动备份 `*.uvprojx.autodebug.bak`。
+调试信息（Debug Information）在每次编译前自动打开，无需处理。
+
+### 3.2 崩溃追踪器一条命令装好
+
+```bash
+python run_autodebug.py --project MDK-ARM/App.uvprojx --install-tracer --uart USART1
+```
+
+它会自动完成：拷入 `cm_backtrace_lite.{c,h}` → 按芯片系列生成阻塞式 `cm_backtrace_putchar`
+（F1/F2/F4/L1 用 `SR/DR`，其余用 `ISR/TDR`，直接测 TXE 位避开宏改名）→ 注册进 Keil 工程与包含路径
+→ 注释掉 `stm32xxxx_it.c` 里那个吞掉崩溃的空 `HardFault_Handler`。
+
+`--uart` 填**应用里已经初始化好的那个串口**（Grill-Me 阶段就该问清）。芯片系列自动从 `.uvprojx` 推导。
+
+> **严禁**在故障处理里用 `printf` / `HAL_UART_Transmit`：它们的超时依赖 SysTick，
+> 而 HardFault 优先级 -1 时 SysTick 进不了中断，tick 永不递增，会在吐出第一个字节前死锁。
+
+### 3.3 你必须写进代码里的两件事
+
+命令能做的都做完了，剩下这两件只有你知道该写在哪：
+
+1. **通过令牌**：测试通过路径上打印 `[ALL TESTS PASSED]`（或 `TESTS_PASSED` / `[PASS]`）。
+   不打印它，闭环永远判不了成功。
+2. **`cm_backtrace_init()`**：`main()` 里外设初始化之前调用，开启子异常分类与除零陷阱。
+
+断言统一用 `AUTO_ASSERT(expr)`，其输出可被直接解析成 `文件:行号`。
+
+### 3.4 第一次跑闭环前先自检
+
+```bash
+python run_autodebug.py --project MDK-ARM/App.uvprojx --check-firmware
+```
+
+逐条列出还缺什么。全部满足后再进闭环，否则一次静默超时你会误判成业务逻辑有问题。
+（闭环超时时也会自动附上这份清单。）
 
 ---
 
@@ -126,6 +161,9 @@ python run_autodebug.py --project "MDK-ARM/YourProject.uvprojx"
 python run_autodebug.py --project MDK-ARM/App.uvprojx          # 完整闭环
 python run_autodebug.py --project MDK-ARM/App.uvprojx --json   # 机器可读
 python run_autodebug.py --project MDK-ARM/App.uvprojx --no-flash  # 只编译
+python run_autodebug.py --project MDK-ARM/App.uvprojx --add-source User/new.c   # 新文件入工程
+python run_autodebug.py --project MDK-ARM/App.uvprojx --install-tracer --uart USART1
+python run_autodebug.py --project MDK-ARM/App.uvprojx --check-firmware          # 固件契约自检
 python run_autodebug.py --list-devices                          # 列探针与串口
 python -m unittest discover -s tests                            # 离线自测（无需硬件）
 ```

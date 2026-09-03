@@ -278,11 +278,24 @@ class AutoDebugEngine:
         cpu_running = self.probe.is_target_running()
         self._log(f"[-] 等了 {self.config.serial.timeout_seconds:.0f}s 没等到通过信号"
                   f"（CPU 是否在跑：{ {True: '是', False: '否', None: '未知'}[cpu_running] }）。")
+        firmware_problems = []
+        try:
+            from .firmware_setup import check_firmware_contract
+            firmware_problems = check_firmware_contract(
+                os.path.dirname(proj_dir) if os.path.basename(proj_dir).upper().startswith("MDK")
+                else proj_dir,
+                self.config.test.pass_keywords)
+        except Exception:
+            pass
+        for problem in firmware_problems:
+            self._log(f"    [固件契约] {problem}")
+
         return DiagnosticReporter.create_from_timeout(
             iteration, uvprojx_path, test_res.raw_output,
             self.config.serial.timeout_seconds, test_res.port, cpu_running,
             self.config.test.pass_keywords,
-            serial_ok=test_res.opened, open_error=test_res.open_error)
+            serial_ok=test_res.opened, open_error=test_res.open_error,
+            firmware_problems=firmware_problems)
 
     # ------------------------------------------------------------------ the loop
 

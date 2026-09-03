@@ -299,7 +299,8 @@ class DiagnosticReporter:
                             cpu_running: Optional[bool],
                             pass_keywords: List[str],
                             serial_ok: bool = True,
-                            open_error: Optional[str] = None) -> DiagnosticReport:
+                            open_error: Optional[str] = None,
+                            firmware_problems: Optional[List[str]] = None) -> DiagnosticReport:
         if not serial_ok:
             status = STATUS_SERIAL_UNAVAILABLE
             summary = f"串口不可用：{open_error}"
@@ -320,6 +321,11 @@ class DiagnosticReporter:
             ]
             signature = "TIMEOUT|no pass token"
 
+        if firmware_problems:
+            # Nine times out of ten a silent run is not a bug in the firmware logic, it is
+            # the firmware never having been told to say anything. Lead with that.
+            actions = firmware_problems + actions
+
         alive = {True: "CPU 正在执行（PC 有变化）",
                  False: "CPU 已停住（halt 或死循环在同一地址）",
                  None: "无探针，无法判断"}[cpu_running]
@@ -338,6 +344,9 @@ class DiagnosticReporter:
             "## 处理建议",
             *[f"{i+1}. {a}" for i, a in enumerate(actions)],
         ]
+        if firmware_problems:
+            lines[-len(actions) - 1:-len(actions) - 1] = [
+                "> 以下固件侧约定尚未满足，它们比业务逻辑更可能是本次无输出的原因。", ""]
 
         return DiagnosticReport(
             timestamp=time.strftime("%Y-%m-%d %H:%M:%S"),

@@ -103,6 +103,16 @@ python run_autodebug.py --project MDK-ARM/App.uvprojx --port COM6 --baud 115200 
 python run_autodebug.py --list-devices                          # 列探针与串口
 ```
 
+不开 uVision 改工程（每条都幂等，首次改动自动备份 `*.autodebug.bak`）：
+
+```bash
+python run_autodebug.py --project MDK-ARM/App.uvprojx --add-source User/dht11.c User/lcd.c
+python run_autodebug.py --project MDK-ARM/App.uvprojx --add-include User --add-define USE_FULL_ASSERT
+python run_autodebug.py --project MDK-ARM/App.uvprojx --add-source drv.c --group Drivers
+python run_autodebug.py --project MDK-ARM/App.uvprojx --install-tracer --uart USART1 [--family g4]
+python run_autodebug.py --project MDK-ARM/App.uvprojx --check-firmware
+```
+
 省略 `--project` 时会在当前目录向下搜索 `.uvprojx`（优先 `MDK-ARM/`），**不会向上跑到隔壁工程**。
 
 ---
@@ -122,7 +132,7 @@ python run_autodebug.py --list-devices                          # 列探针与�
 }
 ```
 
-自检：`python mcp_server.py test` 应输出已注册的 7 个工具。
+自检：`python mcp_server.py test` 应输出已注册的 10 个工具。
 
 | 工具 | 作用 |
 |---|---|
@@ -132,6 +142,9 @@ python run_autodebug.py --list-devices                          # 列探针与�
 | `stm32_read_registers` | halt 目标并读核心 + SCB 故障寄存器；带 `axf_path` 时直接给根因与源码行 |
 | `stm32_diagnose_address` | 裸地址（PC/LR）→ `文件:行号:函数` + 代码片段 |
 | `stm32_list_devices` | 列出探针与串口 |
+| `stm32_project_edit` | 不开 uVision 编辑 `.uvprojx`：加源文件 / 包含路径 / 宏定义 |
+| `stm32_install_tracer` | 一调装好崩溃追踪器（拷文件 + 生成 putchar + 入工程 + 消解 Handler 冲突）|
+| `stm32_check_firmware` | 检查固件侧约定是否满足（通过令牌 / init / putchar）|
 | `stm32_inject` | 注入工具链到指定工程目录 |
 
 > stdout 只走协议帧，所有日志走 stderr；引擎内部的 print 会被重定向，不会污染协议。
@@ -140,7 +153,19 @@ python run_autodebug.py --list-devices                          # 列探针与�
 
 ## 固件侧接入 cm_backtrace_lite
 
-没有这三步，脚本只能告诉你"超时了"，给不出根因。
+**先看这个：绝大部分工作一条命令就做完了。**
+
+```bash
+python run_autodebug.py --project MDK-ARM/App.uvprojx --install-tracer --uart USART1
+```
+
+它会拷入 `cm_backtrace_lite.{c,h}`、按芯片系列生成 `cm_backtrace_port.c`、注册进 Keil 工程与包含路径、
+打开调试信息、并注释掉 `stm32xxxx_it.c` 里那个吞掉崩溃的空 `HardFault_Handler`。幂等，首次改动自动备份。
+
+命令做完后，只剩两件**只有写代码的人知道该放哪**的事：在测试通过路径上打印通过令牌，
+以及在 `main()` 里调用 `cm_backtrace_init()`。用 `--check-firmware` 可以随时确认还差什么。
+
+下面是这套机制的实现细节，供需要自定义时参考。
 
 ### 1. 通过令牌
 
@@ -150,8 +175,9 @@ printf("[ALL TESTS PASSED]\r\n");   /* 或 TESTS_PASSED / [PASS]，可在配置�
 
 ### 2. 崩溃自述（无需探针也能定位崩溃）
 
-把 `mcu_support/cm_backtrace_lite.c` 加入 Keil 工程，实现一个**阻塞式、寄存器级**的字节输出，
-并在 `main()` 最前面调用 `cm_backtrace_init()`：
+`--install-tracer` 生成的 `cm_backtrace_port.c` 就是下面这个形状（手工实现时照抄即可）。
+注意它直接测 TXE 位（bit 7）而不用宏名，避开 `USART_SR_TXE → USART_ISR_TXE → USART_ISR_TXE_TXFNF`
+在不同系列上的改名；F1/F2/F4/L1 用 `SR/DR`，其余用 `ISR/TDR`：
 
 ```c
 #include "cm_backtrace_lite.h"
@@ -177,7 +203,8 @@ int main(void)
 `cm_backtrace_lite.c` 同时提供了 `HardFault_Handler` 的**汇编胶水**（AC5 `__asm` 与 AC6/GCC `naked` 双版本），
 按 `EXC_RETURN` bit2 选出正确的 MSP/PSP 再进 C 函数 —— 直接在 C 处理函数里读 `sp` 拿到的是处理函数自己的栈，不是异常栈帧。
 
-> 若链接器报 `HardFault_Handler` 重复定义：删掉 `stm32xxxx_it.c` 里那个空实现（正是它把崩溃吞掉了），
+> `--install-tracer` 已经自动把 `stm32xxxx_it.c` 里那个空实现注释掉了（原文保留在注释里，可还原）。
+> 若你手工接入并遇到 `HardFault_Handler` 重复定义，删掉那个空实现，
 > 或设 `#define CM_BACKTRACE_PROVIDE_HANDLER 0` 自行调用 `cm_backtrace_fault_handler()`。
 
 崩溃时串口输出：
@@ -322,7 +349,7 @@ loop:
 python -m unittest discover -s tests -v
 ```
 
-31 项覆盖闭环关键路径上的纯函数 —— 编译/链接日志解析、CFSR/HFSR 解码、故障地址有效性、
+61 项覆盖闭环关键路径上的纯函数 —— 编译/链接日志解析、CFSR/HFSR 解码、故障地址有效性、
 UART 崩溃块解析、断言三种格式、串口打分、配置回退。**这些正是一旦静默失效就会让流水线谎报成功的地方。**
 
 ---
@@ -352,6 +379,8 @@ UART 崩溃块解析、断言三种格式、串口打分、配置回退。**这�
 | `autodebug/fault_analyzer.py` | CFSR/HFSR 位解码、栈帧还原、根因分类、中文修复建议 |
 | `autodebug/symbol_resolver.py` | DWARF 行表扁平化 + bisect 反查源码行与片段（含 DWARF5 索引兼容）|
 | `autodebug/diagnostic_report.py` | 结构化报告 + 中文修复提示生成 |
+| `autodebug/project_editor.py` | 文本级编辑 `.uvprojx`：加源文件/包含路径/宏、开调试信息、注释 HAL 空 Handler；幂等 + 备份 |
+| `autodebug/firmware_setup.py` | 一命令装崩溃追踪器（按芯片系列生成阻塞 putchar）、固件契约自检 |
 | `autodebug/engine.py` | 编排器：顺序、护栏、停滞检测、状态持久化 |
 
 ---

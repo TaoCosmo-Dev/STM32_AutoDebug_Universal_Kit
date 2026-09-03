@@ -5,7 +5,7 @@
 [![GitHub Release](https://img.shields.io/badge/Release-v2.0.0-blue?style=flat-square&logo=github)](https://github.com/TaoCosmo-Dev/STM32_AutoDebug_Universal_Kit/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg?style=flat-square)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-STM32%20%7C%20Cortex--M-orange?style=flat-square)]()
-[![Tests](https://img.shields.io/badge/离线自测-31%20项通过-brightgreen?style=flat-square)]()
+[![Tests](https://img.shields.io/badge/离线自测-61%20项通过-brightgreen?style=flat-square)]()
 [![MCP](https://img.shields.io/badge/MCP-stdio%20server-purple?style=flat-square)]()
 
 AI 写嵌入式代码的瓶颈不是不会写，而是**没有反馈**：它看不到 Keil 的报错行号、不知道程序有没有真的跑起来、更不知道 HardFault 时 PC 停在哪。于是只能猜，改一版问一句"好了吗"。
@@ -90,9 +90,8 @@ AI 写嵌入式代码的瓶颈不是不会写，而是**没有反馈**：它看�
 
 > 目前仅 Windows。核心依赖 Keil MDK，暂无 Mac / Linux 版。
 
-**关于 Keil 工程设置**：崩溃定位到源码行需要工程输出调试信息（Keil GUI 里的 Output → Debug Information）。
-这一项本质上只是 `.uvprojx` 里的一个 XML 标签，**本套件在每次编译前会自动检测并打开它**（原工程自动备份为
-`*.uvprojx.autodebug.bak`）。你不需要为此打开 uVision。要关掉这个行为：`build.auto_fix_debug_info: false`。
+> Keil 工程里那些必须勾的选项、必须加进工程的文件，全部由套件和 AI 用命令完成，
+> 详见 [AI 自动完成的准备工作](#ai-自动完成的准备工作)。
 
 ---
 
@@ -140,7 +139,9 @@ cd STM32_AutoDebug_Universal_Kit
 
 规范只有 `AGENTS.md` 一个文件（已存在且不是本套件生成的会保留不覆盖）。不生成 `.cursorrules`、`.clinerules` 这类各家专属副本 —— 同一份内容散成六份只会互相不同步。
 
-**还没有工程**：先弄出一个能编译的 `.uvprojx` 再注入 —— STM32CubeMX 生成、板厂例程改、或 GitHub 上的 HAL 模板都行。本套件不负责建工程，它接管的是「有工程之后」的全部环节。
+**还没有工程**：需要一个能编译的 `.uvprojx` 作为起点——用板厂例程改最快，也可以用 STM32CubeMX 生成。
+把这件事直接交给 AI：*"我的芯片是 STM32F103C8T6，帮我搞一个能编译的 Keil 工程，然后按 AGENTS.md 接管"*。
+工程建好之后的**所有**结构改动（加文件、加路径、加宏、开调试信息、装崩溃追踪器）都由 AI 用命令完成，不需要你开 Keil。
 
 ---
 
@@ -175,7 +176,7 @@ python run_autodebug.py --project MDK-ARM/App.uvprojx --json # 机器可读
 python run_autodebug.py --list-devices                        # 列探针与串口
 ```
 
-也可以配成 MCP Server 让编辑器原生调用（7 个工具，见 [ADVANCED](docs/ADVANCED.md#mcp-server-接入)）。
+也可以配成 MCP Server 让编辑器原生调用（10 个工具，见 [ADVANCED](docs/ADVANCED.md#mcp-server-接入)）。
 
 ---
 
@@ -197,35 +198,57 @@ python run_autodebug.py --list-devices                        # 列探针与串�
 
 ---
 
-## 固件侧要配合的三件事
+## AI 自动完成的准备工作
 
-不做这三步，脚本只能告诉你"超时了"，给不出根因。
+要让崩溃能定位到源码行、让闭环能判定成功，工程需要几项设置。**这些全部由 AI 用命令完成，你不用打开 Keil**：
 
-**1. 通过令牌** —— 测试通过路径上打印（可在配置里改）：
+| 事项 | 谁做 | 怎么做 |
+|---|---|---|
+| 新写的 `.c` 加入工程 | AI | `--add-source User/dht11.c`（不加就是 `L6218E: Undefined symbol`）|
+| 加包含路径 / 宏定义 | AI | `--add-include` / `--add-define` |
+| 开启调试信息 | 套件 | 每次编译前自动检查并打开 `.uvprojx` 里的 `<DebugInformation>` |
+| 装崩溃追踪器 | AI | `--install-tracer --uart USART1` 一条命令搞定（见下）|
+| 打印通过令牌、调用 `cm_backtrace_init()` | AI | 写代码时带上，`--check-firmware` 可自检 |
 
-```c
-printf("[ALL TESTS PASSED]\r\n");
+所有工程改动都**幂等**且首次改动前自动备份为 `*.autodebug.bak`。
+
+### `--install-tracer` 到底做了什么
+
+```bash
+python run_autodebug.py --project MDK-ARM/App.uvprojx --install-tracer --uart USART1
 ```
 
-**2. 崩溃自述** —— 把 `mcu_support/cm_backtrace_lite.c` 加进工程，实现阻塞式字节输出，`main()` 开头调 `cm_backtrace_init()`：
-
-```c
-void cm_backtrace_putchar(char c)                 /* 弱符号，直接实现即可覆盖 */
-{
-    while (!(USART1->SR & USART_SR_TXE)) { }      /* F1/F4 用 SR；G0/G4/H7 用 ISR */
-    USART1->DR = (uint8_t)c;
-}
+```
+[tracer] 已拷入 mcu_support/: cm_backtrace_lite.c, cm_backtrace_lite.h
+[tracer] 已生成 cm_backtrace_port.c（USART1，SR/DR 寄存器组）
+[tracer] 已加入工程组 AutoDebug [App]: cm_backtrace_lite.c, cm_backtrace_port.c
+[tracer] 已加入包含路径 [App]: ..\mcu_support
+[tracer] 已开启调试信息 [App]
+[tracer] 已注释 stm32f1xx_it.c 中的空处理函数: HardFault_Handler
 ```
 
-> ⚠️ 故障处理里**不能用** `printf` / `HAL_UART_Transmit`：它们的超时依赖 SysTick，
-> 而 HardFault 优先级 −1 时 SysTick 进不了中断，`HAL_GetTick()` 永不递增 → 死等 → 一个字节都吐不出来。
-> 本文件因此零 stdio，只做手写十六进制格式化 + 阻塞写寄存器。
+几个值得说明的点：
 
-该文件同时提供了 `HardFault_Handler` 的汇编胶水（AC5 `__asm` 与 AC6/GCC `naked` 两套），
-按 `EXC_RETURN` bit2 选出正确的 MSP/PSP 再进 C 函数 —— 直接在 C 处理函数里读 `sp` 拿到的是处理函数自己的栈，不是异常栈帧。
-链接器若报 `HardFault_Handler` 重复定义，删掉 `stm32xxxx_it.c` 里那个空实现（正是它把崩溃吞掉了）。
+- **`putchar` 按芯片系列生成**：F1/F2/F4/L1 用 `SR/DR`，其余用 `ISR/TDR`；直接测 TXE 位（bit 7）
+  而不是用宏名，避开 `USART_SR_TXE → USART_ISR_TXE → USART_ISR_TXE_TXFNF` 的改名。
+- **不用 `printf`**：故障处理里 `printf`/`HAL_UART_Transmit` 的超时依赖 SysTick，而 HardFault
+  优先级 −1 时 SysTick 进不了中断，`HAL_GetTick()` 永不递增 → 死等 → 一个字节都吐不出来。
+- **自动消解 `HardFault_Handler` 冲突**：HAL 模板里那个 `while(1){}` 空实现既会导致重复定义，
+  又正是它把崩溃变成静默死机。这里把它注释掉（原文保留在注释里，可还原），并自动备份。
+- **`--uart` 填应用里已初始化好的那个串口**——这个参数在 Grill-Me 阶段就问清了。
 
-**3. 断言** —— `AUTO_ASSERT(expr)`，输出格式可被直接解析成 `文件:行号`；HAL `assert_param` 与 C99 `assert` 同样支持。
+### 闭环超时时会告诉你缺什么
+
+固件没有输出时，脚本不会只说"超时了"，而是先检查固件侧约定：
+
+```
+[-] 等了 15s 没等到通过信号（CPU 是否在跑：是）
+    [固件契约] 没有任何源文件打印通过令牌 [ALL TESTS PASSED]，闭环无法判定成功
+    [固件契约] main() 里没有调用 cm_backtrace_init()，崩溃时拿不到 CFSR 分类与除零陷阱
+```
+
+这两条会排在诊断报告 `next_actions` 的最前面——十次静默里有九次不是业务逻辑写错了，
+而是压根没让固件开口说话。
 
 ---
 
@@ -237,9 +260,9 @@ void cm_backtrace_putchar(char c)                 /* 弱符号，直接实现即
 | 编译卡住后被 kill | Keil 弹了模态框（缺器件包 / License / 工程被 IDE 占用）| 关掉 uVision，手动打开工程确认无弹窗 |
 | 退出码 2，无探针 | 调试器未插，或被 Keil / CubeProgrammer 占用 | `--list-devices` 确认；关掉占用程序 |
 | 退出码 2，连不上目标 | 固件复用了 SWD 引脚，或芯片读保护 | 保持 `connect_mode: under-reset`；RDP1 需整片擦除解锁 |
-| 退出码 4，串口零字节 | 串口重定向未实现 / 波特率不符 / COM 被串口助手占用 | 实现 `fputc`；核对 115200；关掉 SSCOM 等 |
-| 退出码 4，有输出无令牌 | 测试没走到输出点 | 看报告里的 **CPU 存活遥测**：PC 不变 = 卡在某个死等循环 |
-| 崩溃了但无源码行 | 工程未输出调试信息 | 正常会被自动打开；若关了 `auto_fix_debug_info`，需手工把 `.uvprojx` 的 `<DebugInformation>` 置 1 |
+| 退出码 4，串口零字节 | 串口重定向未实现 / 波特率不符 / COM 被串口助手占用 | 前两项由 AI 修（`--check-firmware` 会点名）；你只需关掉 SSCOM 等占用串口的程序 |
+| 退出码 4，有输出无令牌 | 测试没走到输出点 | 报告会先列出未满足的固件契约，再看 **CPU 存活遥测**：PC 不变 = 卡在死等循环 |
+| 崩溃了但无源码行 | 工程未输出调试信息 | 每次编译前会自动打开；只有手动关了 `auto_fix_debug_info` 才需处理 |
 | 报告写"故障地址无效" | imprecise 总线错误（写缓冲延迟） | 在可疑写操作后加 `__DSB()` 缩小范围 |
 | 连续几轮同一个错 | 上一次修改没生效 | 报告的 `repeated_failure` 会为 true，换思路而不是重复同类改动 |
 
@@ -254,10 +277,10 @@ void cm_backtrace_putchar(char c)                 /* 弱符号，直接实现即
 ├── mcp_server.py               # MCP stdio 服务端（7 个工具）
 ├── AGENTS.md                   # AI 开发规范（唯一的规则文件，注入到工程里）
 ├── docs/ADVANCED.md            # 闭环时序、完整配置、MCP、架构、v2.0 修复清单
-├── autodebug/                  # 引擎：编译 / 烧录 / 串口 / 故障分析 / 符号解析 / 报告 / 编排
+├── autodebug/                  # 引擎：编译 / 烧录 / 串口 / 故障分析 / 符号解析 / 报告 / 工程编辑 / 编排
 ├── mcu_support/                # cm_backtrace_lite：固件侧崩溃追踪器 + HardFault 汇编胶水
 ├── templates/                  # 硬件访谈与接线指南模板
-└── tests/test_offline.py       # 31 项离线自测（无需硬件）
+└── tests/                       # 61 项离线自测（无需硬件）
 ```
 
 ---
@@ -285,8 +308,9 @@ void cm_backtrace_putchar(char c)                 /* 弱符号，直接实现即
 python -m unittest discover -s tests -v
 ```
 
-31 项覆盖闭环关键路径上的纯函数：编译/链接日志解析、CFSR/HFSR 解码、故障地址有效性、
-UART 崩溃块解析、断言三种格式、串口打分、配置回退。无需 Keil、探针或板子。
+61 项覆盖闭环关键路径上的纯函数：编译/链接日志解析、CFSR/HFSR 解码、故障地址有效性、
+UART 崩溃块解析、断言三种格式、串口打分、配置回退，以及 `.uvprojx` 编辑器的幂等与 XML 完整性。
+无需 Keil、探针或板子。
 
 ---
 
