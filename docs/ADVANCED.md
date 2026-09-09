@@ -94,6 +94,7 @@ graph TD
 ## 命令行用法
 
 ```bash
+python run_autodebug.py --create-project MyProj --mcu stm32f407zg # 零依赖一键新建全新 HAL 工程
 python run_autodebug.py --project MDK-ARM/App.uvprojx          # 完整闭环
 python run_autodebug.py --project MDK-ARM/App.uvprojx --json   # 机器可读
 python run_autodebug.py --project MDK-ARM/App.uvprojx --no-flash   # 只编译
@@ -132,10 +133,11 @@ python run_autodebug.py --project MDK-ARM/App.uvprojx --check-firmware
 }
 ```
 
-自检：`python mcp_server.py test` 应输出已注册的 10 个工具。
+自检：`python mcp_server.py test` 应输出已注册的 11 个工具。
 
 | 工具 | 作用 |
 |---|---|
+| `stm32_create_project` | 零依赖一键生成完整官方 HAL 库工程（标准 Core/Drivers/MDK-ARM 结构，直编译 0 Error）|
 | `stm32_closed_loop` | 主入口：完整闭环，返回可直接执行的修复提示 |
 | `stm32_build` | 只编译，返回结构化编译/链接错误 |
 | `stm32_flash` | 烧录（`halt_after` 可保持内核 halt） |

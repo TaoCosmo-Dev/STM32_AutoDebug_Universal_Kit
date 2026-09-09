@@ -139,9 +139,13 @@ cd STM32_AutoDebug_Universal_Kit
 
 规范只有 `AGENTS.md` 一个文件（已存在且不是本套件生成的会保留不覆盖）。不生成 `.cursorrules`、`.clinerules` 这类各家专属副本 —— 同一份内容散成六份只会互相不同步。
 
-**还没有工程**：需要一个能编译的 `.uvprojx` 作为起点——用板厂例程改最快，也可以用 STM32CubeMX 生成。
-把这件事直接交给 AI：*"我的芯片是 STM32F103C8T6，帮我搞一个能编译的 Keil 工程，然后按 AGENTS.md 接管"*。
-工程建好之后的**所有**结构改动（加文件、加路径、加宏、开调试信息、装崩溃追踪器）都由 AI 用命令完成，不需要你开 Keil。
+**还没有工程**：无需安装 STM32CubeMX，无需打开 Keil GUI，一条命令 1 秒从零生成**官方 HAL 库标准工程**（标准 `Core/`、`Drivers/`、`MDK-ARM/` 结构，直编译 0 Error，且自带闭环自愈脚本）：
+
+```bash
+python run_autodebug.py --create-project MyBlinky --mcu stm32f407zg
+```
+
+工程建好之后的**所有**结构改动（加文件、加路径、加宏、开调试信息、装崩溃追踪器）都由 AI 用命令完成，全程不需你开 Keil。
 
 ---
 
@@ -171,12 +175,13 @@ Claude Code、Cursor、Windsurf、Cline、Trae、通义灵码、Copilot、Aider�
 AI 也可以直接调命令行（它自己会调，你一般不用）：
 
 ```bash
+python run_autodebug.py --create-project MyBlinky --mcu stm32f407zg # 零依赖一键建全新 HAL 工程
 python run_autodebug.py --project MDK-ARM/App.uvprojx        # 完整闭环
 python run_autodebug.py --project MDK-ARM/App.uvprojx --json # 机器可读
 python run_autodebug.py --list-devices                        # 列探针与串口
 ```
 
-也可以配成 MCP Server 让编辑器原生调用（10 个工具，见 [ADVANCED](docs/ADVANCED.md#mcp-server-接入)）。
+也可以配成 MCP Server 让编辑器原生调用（11 个工具，见 [ADVANCED](docs/ADVANCED.md#mcp-server-接入)）。
 
 ---
 

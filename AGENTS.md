@@ -158,6 +158,7 @@ python run_autodebug.py --project MDK-ARM/App.uvprojx --check-firmware
 ## 6. 常用命令
 
 ```bash
+python run_autodebug.py --create-project MyProj --mcu stm32f407zg # 零依赖一键建全新 HAL 工程
 python run_autodebug.py --project MDK-ARM/App.uvprojx          # 完整闭环
 python run_autodebug.py --project MDK-ARM/App.uvprojx --json   # 机器可读
 python run_autodebug.py --project MDK-ARM/App.uvprojx --no-flash  # 只编译
