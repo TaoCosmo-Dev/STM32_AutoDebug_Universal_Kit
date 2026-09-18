@@ -251,8 +251,16 @@ class AutoDebugEngine:
             self._log(f"[-] 烧录失败：{flash_res.message}")
             return DiagnosticReporter.create_from_flash_failure(
                 flash_res.message, iteration, uvprojx_path, self.probe.describe_probes())
-        self._log(f"[+] 烧录成功（下载器 {flash_res.probe_id}，芯片 {flash_res.target_name}），"
-                  f"CPU 已停在复位入口等待放行。")
+        if flash_res.halted:
+            self._log(f"[+] 烧录成功（下载器 {flash_res.probe_id}，芯片 {flash_res.target_name}），"
+                      f"CPU 已停在复位入口等待放行。")
+        else:
+            # Never claim a guarantee that was not verified. A CLI-fallback flash resets
+            # and runs the target, so the boot banner is already gone by now; phase 3
+            # restarts the target once the monitor is listening.
+            self._log(f"[!] 烧录成功（下载器 {flash_res.probe_id}，芯片 {flash_res.target_name}），"
+                      f"但**没能让 CPU 停住**（走了 CLI 兜底烧录，它会直接复位运行）。"
+                      f"启动横幅可能已经错过，稍后会在串口就绪后重启目标补抓。")
 
         # ---- Phase 3: listen first, then release the core ---------------------------
         self._log(f"\n>>> [第 {iteration} 轮] 步骤 3/4  先打开串口监听，再放 CPU 运行 ...")
@@ -265,6 +273,14 @@ class AutoDebugEngine:
 
         if flash_res.halted:
             self.probe.resume()
+        elif serial_ok:
+            # The core was never held: it booted (and printed) before the monitor existed.
+            # Restart it now that someone is listening, otherwise this run can only ever
+            # time out on a banner that was already lost -- which reads exactly like a
+            # firmware bug and sends the user hunting in the wrong place.
+            self._log("[!] CPU 未被停住，串口就绪后重启目标以重新捕获启动输出 ...")
+            if not self.probe.reset_and_run():
+                self._log("[!] 重启目标失败：本轮的串口判定可能不可信。")
         time.sleep(self.config.serial.boot_grace_seconds)
 
         test_res = self.serial_mon.wait_for_result(

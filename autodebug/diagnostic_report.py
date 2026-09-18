@@ -9,6 +9,7 @@ a patch changed nothing and escalate instead of burning the remaining iterations
 from dataclasses import asdict, dataclass, field, is_dataclass
 import json
 import os
+import re
 import time
 from typing import Any, Dict, List, Optional
 
@@ -69,6 +70,19 @@ def _tail(text: str, limit: int = 3000) -> str:
     if not text:
         return ""
     return text if len(text) <= limit else "...\n" + text[-limit:]
+
+
+def _unrecognized_target(message: str) -> Optional[str]:
+    """Pull the target name out of pyOCD's "target type X not recognized" complaint.
+
+    This failure looks like a flash failure but is purely a missing CMSIS device pack:
+    the probe is fine, the wiring is fine, and every wiring-related suggestion is a
+    dead end. Worth detecting precisely so the report can say the one useful thing.
+    """
+    if not message:
+        return None
+    m = re.search(r"[Tt]arget type\s+(\S+?)\s+not recognized", message)
+    return m.group(1).strip("'\"") if m else None
 
 
 class DiagnosticReporter:
@@ -135,12 +149,27 @@ class DiagnosticReporter:
     @staticmethod
     def create_from_flash_failure(message: str, iteration: int, proj_path: str,
                                   probes: List[str]) -> DiagnosticReport:
-        actions = [
-            "确认调试探针（CMSIS-DAP / ST-Link / DAPLink）已插好，且未被 Keil IDE、STM32CubeProgrammer 等占用。",
-            "确认 SWDIO / SWCLK / GND / 3V3 四线接线正确，目标板已独立供电。",
-            "若固件把 SWD 引脚复用成了普通 IO，请保持 connect_mode: under-reset，或按住复位再烧录。",
-            "芯片被读保护（RDP Level 1）时需先整片擦除解锁。",
-        ]
+        # Some flash failures have nothing to do with the hardware, and leading with
+        # "check your wiring" for those costs the user a long detour. Detect the ones
+        # with an exact, known cause first and answer them directly.
+        target_hint = _unrecognized_target(message)
+        if target_hint:
+            actions = [
+                f"pyOCD 不认识目标芯片 `{target_hint}`——**这不是接线或供电问题**，"
+                f"探针也已经被识别到了。它缺的是该芯片的 CMSIS 器件支持包。",
+                f"装上即可：`python -m pyocd pack install {target_hint}`",
+                "装完用 `python -m pyocd list --targets` 确认该型号已出现，再重跑本闭环。",
+                "若该型号在 pack 索引里查不到（`python -m pyocd pack find <型号>` 无结果），"
+                "就在 autodebug.config.yaml 里把 debugger.target_override 改成"
+                "同系列的受支持型号，或退回通用的 cortex_m。",
+            ]
+        else:
+            actions = [
+                "确认调试探针（CMSIS-DAP / ST-Link / DAPLink）已插好，且未被 Keil IDE、STM32CubeProgrammer 等占用。",
+                "确认 SWDIO / SWCLK / GND / 3V3 四线接线正确，目标板已独立供电。",
+                "若固件把 SWD 引脚复用成了普通 IO，请保持 connect_mode: under-reset，或按住复位再烧录。",
+                "芯片被读保护（RDP Level 1）时需先整片擦除解锁。",
+            ]
         lines = [
             f"# STM32 烧录失败报告（迭代 {iteration}）",
             f"**项目**: `{proj_path}`",
