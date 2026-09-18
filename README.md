@@ -5,10 +5,10 @@
 [![GitHub Release](https://img.shields.io/badge/Release-v2.2.0-blue?style=flat-square&logo=github)](https://github.com/TaoCosmo-Dev/STM32_AutoDebug_Universal_Kit/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg?style=flat-square)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-STM32%20%7C%20Cortex--M-orange?style=flat-square)]()
-[![Tests](https://img.shields.io/badge/离线自测-61%20项通过-brightgreen?style=flat-square)]()
+[![Tests](https://img.shields.io/badge/离线自测-64%20项通过-brightgreen?style=flat-square)]()
 [![MCP](https://img.shields.io/badge/MCP-stdio%20server-purple?style=flat-square)]()
 
-AI 写嵌入式代码的瓶颈不是不会写，而是**没有反馈**：它看不到 Keil 的报错行号、不知道程序有没有真的跑起来、更不知道 HardFault 时 PC 停在哪。于是只能猜，改一版问一句"好了吗"。
+AI 写嵌入式代码的瓶颈不是不会写，而是**没有反馈**：它看不到 Keil 的报错行号、不知道程序有没有真的跑起来、更不知道 HardFault 时 PC 停在哪。缺少判据，便只能反复试探，每改一版都要回头询问结果。
 
 本套件把这条反馈回路补上，并且**只认硬证据**——编译 0 Error + 烧录成功 + 实机串口吐出通过令牌，三者同时成立才算通过，AI 没法"假装做完了"。
 
@@ -22,7 +22,7 @@ AI 写嵌入式代码的瓶颈不是不会写，而是**没有反馈**：它看�
 
 ## 实际效果
 
-你在 AI 编辑器里说人话，它先反问硬件问题，然后给接线表：
+在 AI 编辑器中用自然语言描述需求，它会先确认硬件参数，再给出接线表：
 
 > **你**：我要用 DHT11 读温湿度，串口打印，LED 每秒闪一次。
 >
@@ -37,7 +37,7 @@ AI 写嵌入式代码的瓶颈不是不会写，而是**没有反馈**：它看�
 > | GND | GND |
 > | DATA | PA1（需 4.7kΩ 上拉） |
 
-你回"接好了"，之后全自动：
+确认接线完成后，后续全程自动执行：
 
 ```
 >>> [第 1 轮] 步骤 1/4  正在用 Keil 编译 ...
@@ -56,7 +56,7 @@ AI 写嵌入式代码的瓶颈不是不会写，而是**没有反馈**：它看�
 [+] 实机测试通过！（收到通过信号：[ALL TESTS PASSED]）
 ```
 
-崩溃时不是"跑飞了"，而是直接给到行：
+程序崩溃时不止步于"跑飞"，而是定位到具体源码行：
 
 ```
 [-] 板子崩溃了（固件通过串口自报了故障现场）
@@ -85,7 +85,7 @@ AI 写嵌入式代码的瓶颈不是不会写，而是**没有反馈**：它看�
 | 项 | 说明 |
 |---|---|
 | Python ≥ 3.10 | 安装时勾选 `Add python.exe to PATH` |
-| Keil MDK5 | AC5 / AC6 均支持。**装完就不用再打开它了** —— 编译由本套件走 UV4 命令行驱动 |
+| Keil MDK5 | AC5 / AC6 均支持。**安装后无需再启动其 GUI** —— 编译由本套件通过 UV4 命令行驱动 |
 | AI 编辑器 | Claude Code / Cursor / Windsurf / Cline / Roo Code / GitHub Copilot / Codex CLI / Trae / 通义灵码 / Aider 等均可，见下 |
 
 > 目前仅 Windows。核心依赖 Keil MDK，暂无 Mac / Linux 版。
@@ -117,9 +117,9 @@ cd STM32_AutoDebug_Universal_Kit
   [READY] 这台电脑已具备 编译 / 烧录 / 自愈调试 能力
 ```
 
-三行都有内容就绪。`NOT FOUND` / 探针为空 / 串口为空，分别对应 Keil 未装、调试器未插或被占用、缺 USB-UART 驱动。
+三项均有输出即表示环境就绪。`NOT FOUND` / 探针为空 / 串口为空，分别对应 Keil 未装、调试器未插或被占用、缺 USB-UART 驱动。
 
-最后一步它会装上 **Agent Skill**，这样**任何工程都不用再注入**：
+最后一步会安装 **Agent Skill**，此后**任何工程均无需再执行注入**：
 
 ```
 [5/5] 安装 Agent Skill（让 AI 在任意工程里自动加载本套件）
@@ -137,13 +137,13 @@ cd STM32_AutoDebug_Universal_Kit
 
 ### 路线 A：免注入（推荐，装一次管所有工程）
 
-`setup_env` 跑完就已经生效了 —— **什么都不用做**。用 AI 编辑器打开任意 Keil 工程，直接说需求：
+`setup_env` 执行完毕即已生效，**无需任何额外操作**。用 AI 编辑器打开任意 Keil 工程，直接描述需求：
 
 ```
 我要用 DHT11 读温湿度，串口打印，LED 每秒闪一次。
 ```
 
-AI 会自己加载规范、追问硬件参数、给接线表、然后跑闭环。**不需要注入，不需要开场白。**
+AI 将自动加载规范、确认硬件参数、给出接线表并执行闭环。**无需注入，无需开场白。**
 
 原理：引擎的所有路径都从 `--project` 推导（诊断报告、`.autodebug/` 状态、`mcu_support/` 拷贝目标都落在目标工程里），
 配置有 `显式 --config > 工程内 autodebug.config.yaml > 套件内置默认` 的回退链 —— 所以引擎**本来就不需要待在工程里**。
@@ -193,17 +193,17 @@ python run_autodebug.py --create-project MyBlinky --mcu stm32f407zg
 
 ## 用法
 
-用 AI 编辑器打开工程目录，直接说需求：
+用 AI 编辑器打开工程目录，直接描述需求：
 
 ```
-我想做：<你的需求，说人话即可>
+我要实现：<用自然语言描述功能>
 ```
 
-**走路线 B（注入）或编辑器不支持 Skill 时**，加一句开场白让它读规范：
+**采用路线 B（注入）或编辑器尚不支持 Skill 时**，以一句开场白指引它读取规范：
 
 ```
 读一下 AGENTS.md，按里面的规范来。
-我想做：<你的需求，说人话即可>
+我要实现：<用自然语言描述功能>
 ```
 
 **不挑编辑器**：规范只有 `AGENTS.md` 一个文件，靠开场白那句"读一下 AGENTS.md"生效，
@@ -214,13 +214,13 @@ Claude Code、Cursor、Windsurf、Cline、Trae、通义灵码、Copilot、Aider�
 
 | 阶段 | AI | 你 |
 |---|---|---|
-| 1 需求对齐 | 追问 5 类硬件参数（时钟树 / 引脚冲突 / 外设指标 / 驱动模式 / 架构选型）| 如实回答，不确定就说"你来定" |
-| 2 方案确认 | 输出技术方案 + 引脚对照表 | 过一眼 |
-| 3 接线 | 给出杜邦线对照表 + 电气警告 | **插线**（唯一需要动手的地方），回"接好了" |
-| 4 闭环 | 写码 → 编译 → 烧录 → 上板 → 崩溃归因 → 自修复 → 重来 | 等 |
+| 1 需求对齐 | 追问 5 类硬件参数（时钟树 / 引脚冲突 / 外设指标 / 驱动模式 / 架构选型）| 如实回答；不确定的项可交由 AI 决定 |
+| 2 方案确认 | 输出技术方案 + 引脚对照表 | 审阅确认 |
+| 3 接线 | 给出杜邦线对照表 + 电气警告 | **接线**（唯一需要动手的环节），完成后告知 AI |
+| 4 闭环 | 写码 → 编译 → 烧录 → 上板 → 崩溃归因 → 自修复 → 迭代 | 无需干预 |
 | 5 交付 | 报告通过 | 验收 |
 
-AI 也可以直接调命令行（它自己会调，你一般不用）：
+以下命令由 AI 自动调用，通常无需手动执行：
 
 ```bash
 python run_autodebug.py --create-project MyBlinky --mcu stm32f407zg # 零依赖一键建全新 HAL 工程
@@ -253,14 +253,14 @@ python run_autodebug.py --list-devices                        # 列探针与串�
 
 ## AI 自动完成的准备工作
 
-要让崩溃能定位到源码行、让闭环能判定成功，工程需要几项设置。**这些全部由 AI 用命令完成，你不用打开 Keil**：
+要使崩溃可定位到源码行、闭环可判定成功，工程需完成几项设置。**以下均由 AI 通过命令完成，无需打开 Keil**：
 
 | 事项 | 谁做 | 怎么做 |
 |---|---|---|
 | 新写的 `.c` 加入工程 | AI | `--add-source User/dht11.c`（不加就是 `L6218E: Undefined symbol`）|
 | 加包含路径 / 宏定义 | AI | `--add-include` / `--add-define` |
 | 开启调试信息 | 套件 | 每次编译前自动检查并打开 `.uvprojx` 里的 `<DebugInformation>` |
-| 装崩溃追踪器 | AI | `--install-tracer --uart USART1` 一条命令搞定（见下）|
+| 装崩溃追踪器 | AI | `--install-tracer --uart USART1` 一条命令完成（见下）|
 | 打印通过令牌、调用 `cm_backtrace_init()` | AI | 写代码时带上，`--check-firmware` 可自检 |
 
 所有工程改动都**幂等**且首次改动前自动备份为 `*.autodebug.bak`。
@@ -280,7 +280,7 @@ python run_autodebug.py --project MDK-ARM/App.uvprojx --install-tracer --uart US
 [tracer] 已注释 stm32f1xx_it.c 中的空处理函数: HardFault_Handler
 ```
 
-几个值得说明的点：
+其中几处设计值得说明：
 
 - **`putchar` 按芯片系列生成**：F1/F2/F4/L1 用 `SR/DR`，其余用 `ISR/TDR`；直接测 TXE 位（bit 7）
   而不是用宏名，避开 `USART_SR_TXE → USART_ISR_TXE → USART_ISR_TXE_TXFNF` 的改名。
@@ -300,8 +300,8 @@ python run_autodebug.py --project MDK-ARM/App.uvprojx --install-tracer --uart US
     [固件契约] main() 里没有调用 cm_backtrace_init()，崩溃时拿不到 CFSR 分类与除零陷阱
 ```
 
-这两条会排在诊断报告 `next_actions` 的最前面——十次静默里有九次不是业务逻辑写错了，
-而是压根没让固件开口说话。
+这两条会排在诊断报告 `next_actions` 的最前面 —— 绝大多数静默超时的原因并非业务逻辑有误，
+而是固件根本没有输出任何可供判定的信息。
 
 ---
 
