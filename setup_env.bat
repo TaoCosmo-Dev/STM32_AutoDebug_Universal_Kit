@@ -79,13 +79,13 @@ echo.
 
 echo.
 echo [5/5] 安装 Agent Skill（让 AI 在任意工程里自动加载本套件）
-"%PY%" install_skill.py
+"%PY%" "%~dp0install_skill.py"
 
 echo.
 echo =======================================================
 echo   [READY] 这台电脑已具备 编译 / 烧录 / 自愈调试 能力
 echo.
-echo   下一步：用 AI 编辑器打开**任意** Keil 工程，直接说需求即可。
+echo   下一步：用 AI 编辑器打开任意 Keil 工程，直接说需求即可。
 echo   （不需要注入，不需要开场白 —— Skill 已全局生效）
 echo.
 echo   仍想把工具链随工程提交 git？把工程文件夹拖到 inject_to_project.bat

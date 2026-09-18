@@ -64,7 +64,7 @@ if ($LASTEXITCODE -ne 0) {
 & $pyPath run_autodebug.py --list-devices
 
 Write-Host "`n[5/5] 安装 Agent Skill（让 AI 在任意工程里自动加载本套件）" -ForegroundColor Yellow
-& $pyPath install_skill.py
+& $pyPath (Join-Path $PSScriptRoot "install_skill.py")
 
 Write-Host "`n=====================================================================" -ForegroundColor Cyan
 Write-Host " [环境就绪] 这台电脑已具备 编译 / 烧录 / 自愈调试 能力" -ForegroundColor Green
