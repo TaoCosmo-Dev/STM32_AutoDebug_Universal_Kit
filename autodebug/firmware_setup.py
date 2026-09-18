@@ -9,6 +9,7 @@ write a blocking UART putchar. All of it is mechanical, so all of it belongs her
 
 After this the only thing left is application logic, which is the AI's job anyway.
 """
+import io
 import os
 import re
 import shutil
@@ -63,7 +64,62 @@ def _family_of(target_name: Optional[str]) -> Optional[str]:
     return m.group(1) if m else None
 
 
-def _cmsis_header(family: str) -> str:
+# STM32 ships two mutually exclusive C libraries and their CMSIS headers are named
+# differently. Picking by chip family alone gets it wrong half the time.
+#   HAL / LL  ->  stm32f1xx.h   (STM32Cube_FW_*, needs a separate multi-hundred-MB install)
+#   StdPeriph ->  stm32f10x.h   (what Keil's device packs actually ship)
+# Include the wrong one and the tracer cannot compile at all.
+def _uses_std_periph(project_root: Optional[str]) -> Optional[bool]:
+    """True = StdPeriph project, False = HAL project, None = cannot tell.
+
+    Decided by what the project itself declares, in order of trustworthiness:
+    the preprocessor defines in the .uvprojx, then the headers actually on disk.
+    """
+    if not project_root or not os.path.isdir(project_root):
+        return None
+
+    for root, dirs, files in os.walk(project_root):
+        dirs[:] = [d for d in dirs if d.lower() not in ("objects", "listings", ".git")]
+        for fn in files:
+            low = fn.lower()
+            if low.endswith(".uvprojx"):
+                try:
+                    with io.open(os.path.join(root, fn), encoding="utf-8",
+                                 errors="ignore") as fh:
+                        text = fh.read()
+                except OSError:
+                    continue
+                if "USE_STDPERIPH_DRIVER" in text:
+                    return True
+                if "USE_HAL_DRIVER" in text:
+                    return False
+            # StdPeriph headers are stm32f10x_*.h; HAL headers are stm32f1xx_hal*.h.
+            if re.match(r"stm32[a-z]\d{1,2}x_(gpio|rcc|usart)\.h$", low):
+                return True
+            if re.match(r"stm32[a-z]\dxx_hal\.h$", low):
+                return False
+    return None
+
+
+# StdPeriph device-header names are not derivable from the family with one rule:
+# F1 and F3 spell it stm32f10x.h / stm32f30x.h, the rest use stm32fNxx.h. And ST never
+# shipped StdPeriph past these families -- G0/G4/H7/L4/... are HAL-only -- so a family
+# missing from this map means the project cannot be StdPeriph whatever else suggests it.
+_STD_PERIPH_HEADER = {
+    "f0": "stm32f0xx.h",
+    "f1": "stm32f10x.h",
+    "f2": "stm32f2xx.h",
+    "f3": "stm32f30x.h",
+    "f4": "stm32f4xx.h",
+    "l1": "stm32l1xx.h",
+}
+
+
+def _cmsis_header(family: str, project_root: Optional[str] = None) -> str:
+    if _uses_std_periph(project_root) is True:
+        header = _STD_PERIPH_HEADER.get(family)
+        if header:
+            return f'#include "{header}"'
     return f'#include "stm32{family}xx.h"'
 
 
@@ -82,7 +138,7 @@ def generate_uart_port(project_root: str, uart: str = "USART1",
         return result
 
     text = _PORT_TEMPLATE.format(
-        include=_cmsis_header(family),
+        include=_cmsis_header(family, project_root),
         uart=uart,
         status_reg="SR" if v1 else "ISR",
         data_reg="DR" if v1 else "TDR",

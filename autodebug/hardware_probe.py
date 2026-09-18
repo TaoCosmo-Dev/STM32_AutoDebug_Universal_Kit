@@ -199,7 +199,7 @@ class HardwareProbe:
         target_type = self.config.target_override or "cortex_m"
 
         if not self.open():
-            return self._flash_pyocd_cli(binary_path, probe_uid, target_type)
+            return self._flash_pyocd_cli(binary_path, probe_uid, target_type, halt_after)
 
         try:
             from pyocd.flash.file_programmer import FileProgrammer
@@ -209,18 +209,45 @@ class HardwareProbe:
             target.reset_and_halt()
             if not halt_after:
                 target.resume()
-            return FlashResult(True, "programmed", halted=halt_after,
+            # Report what the core is actually doing, not what was asked for: the whole
+            # halt-then-listen guarantee downstream is decided by this flag.
+            really_halted = False
+            if halt_after:
+                try:
+                    really_halted = bool(target.is_halted())
+                except Exception:
+                    really_halted = False
+            return FlashResult(True, "programmed", halted=really_halted,
                                probe_id=probe_uid, target_name=target_type)
         except Exception as e:
             self.close()
-            cli = self._flash_pyocd_cli(binary_path, probe_uid, target_type)
+            cli = self._flash_pyocd_cli(binary_path, probe_uid, target_type, halt_after)
             if not cli.success:
                 cli.message = f"pyocd API failed ({e}); CLI fallback failed ({cli.message})"
             return cli
 
+    def _rehalt_after_cli(self) -> bool:
+        """Put the core back under reset-and-halt after a CLI flash let it run."""
+        try:
+            self.close()
+            if not self.open():
+                return False
+            self._session.target.reset_and_halt()
+            return bool(self._session.target.is_halted())
+        except Exception as e:
+            print(f"[probe] could not re-halt after CLI flash: {e}", file=sys.stderr)
+            return False
+
     def _flash_pyocd_cli(self, binary_path: str, probe_uid: Optional[str],
-                         target_type: str) -> FlashResult:
-        """Last-resort CLI flash. Always passes -u so it can never prompt."""
+                         target_type: str, halt_after: bool = False) -> FlashResult:
+        """Last-resort CLI flash. Always passes -u so it can never prompt.
+
+        The CLI resets and RUNS the target, which silently voids the one guarantee this
+        whole tool is built on: the core must stay halted until the serial monitor is
+        listening, or the firmware's boot banner (and with it the pass token) is gone
+        before anyone can read it. So when the caller asked for a halted core, re-open a
+        session and halt it again here, and report honestly whether that worked.
+        """
         cmd = [sys.executable, "-m", "pyocd", "flash", "-t", target_type]
         if probe_uid:
             cmd.extend(["-u", probe_uid])
@@ -229,8 +256,16 @@ class HardwareProbe:
             res = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
             ok = res.returncode == 0
             msg = (res.stderr or res.stdout or "").strip()[-400:]
-            # The CLI resets and runs; we cannot hold the core halted through it.
-            return FlashResult(ok, msg or "pyocd CLI flash", halted=False,
+            halted = False
+            if ok and halt_after:
+                halted = self._rehalt_after_cli()
+                if not halted:
+                    msg = ((msg + " | ") if msg else "") + (
+                        "WARNING: flashed via the pyocd CLI, which resets and runs the "
+                        "target; the core could not be re-halted, so the boot banner may "
+                        "already be gone. The caller must restart the target after the "
+                        "serial monitor is open.")
+            return FlashResult(ok, msg or "pyocd CLI flash", halted=halted,
                                probe_id=probe_uid, target_name=target_type)
         except Exception as e:
             return FlashResult(False, f"pyocd CLI flash failed: {e}")
@@ -289,23 +324,48 @@ class HardwareProbe:
             return False
 
     def is_target_running(self, sample_gap: float = 0.05) -> Optional[bool]:
-        """CPU liveness telemetry: sample the PC twice without halting the core.
+        """CPU liveness telemetry.
 
-        Returns True (PC advanced), False (halted or stuck at one address), or None
-        when the probe cannot answer.
+        Returns True (PC advanced between samples), False (core halted, or spinning at
+        one address), or None when the probe cannot answer.
+
+        The PC samples are taken by halting briefly and resuming again, because a
+        Cortex-M debug port cannot read core registers while the core is running --
+        pyOCD raises "Core is not halted; cannot read core registers". The previous
+        implementation read the PC without halting, so on a running core every read
+        raised, the exception handler returned None, and the True branch was
+        unreachable: a healthy board was reported as "halted" or "unknown", which is
+        the opposite of the truth and sends the diagnosis in the wrong direction.
+
+        Halting perturbs the target, so this is only called on the failure path, where
+        the run is already being abandoned. The core is always resumed again.
         """
         if not self.open():
             return None
+        target = self._session.target
         try:
-            target = self._session.target
             if target.is_halted():
                 return False
-            pc1 = target.read_core_register("pc")
-            time.sleep(sample_gap)
-            pc2 = target.read_core_register("pc")
-            return pc1 != pc2
         except Exception:
             return None
+
+        samples = []
+        try:
+            for _ in range(2):
+                target.halt()
+                samples.append(int(target.read_core_register("pc")))
+                target.resume()
+                time.sleep(sample_gap)
+        except Exception:
+            return None
+        finally:
+            # Never leave the core parked because telemetry threw halfway through.
+            try:
+                if target.is_halted():
+                    target.resume()
+            except Exception:
+                pass
+        return samples[0] != samples[1]
 
     # ------------------------------------------------------------------ fault telemetry
 
