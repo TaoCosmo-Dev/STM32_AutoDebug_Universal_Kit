@@ -2,7 +2,7 @@
 
 ### 给 AI 装上手和眼睛：自己写代码、编译、烧录、上板跑、崩了自己查
 
-[![GitHub Release](https://img.shields.io/badge/Release-v2.0.0-blue?style=flat-square&logo=github)](https://github.com/TaoCosmo-Dev/STM32_AutoDebug_Universal_Kit/releases)
+[![GitHub Release](https://img.shields.io/badge/Release-v2.2.0-blue?style=flat-square&logo=github)](https://github.com/TaoCosmo-Dev/STM32_AutoDebug_Universal_Kit/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg?style=flat-square)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-STM32%20%7C%20Cortex--M-orange?style=flat-square)]()
 [![Tests](https://img.shields.io/badge/离线自测-61%20项通过-brightgreen?style=flat-square)]()
