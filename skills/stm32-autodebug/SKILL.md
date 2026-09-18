@@ -35,7 +35,7 @@ ls *.uvprojx MDK-ARM/*.uvprojx run_autodebug.py 2>/dev/null
 |---|---|
 | 有 `.uvprojx`，**没有** `run_autodebug.py` | **免注入模式**（推荐）。直接用套件绝对路径调用，见下 |
 | 有 `.uvprojx`，**也有** `run_autodebug.py` | 套件已注入。用工程内的相对路径调用即可 |
-| 连 `.uvprojx` 都没有 | 用 `--create-project` 一条命令生成标准 HAL 工程（不需要 CubeMX，不需要开 Keil）|
+| 连 `.uvprojx` 都没有 | **本套件不生成工程**。告诉用户先拿到一个能编译的 Keil 工程（CubeMX 导出 / 开发板例程 / 教程配套工程均可），再回来接入 |
 
 ---
 
@@ -76,7 +76,6 @@ python run_autodebug.py --project "MDK-ARM/App.uvprojx"
 
 ```bash
 # 把下面的 KIT 换成 {{KIT_DIR}}，或在已注入的工程里直接用 run_autodebug.py
-python "KIT/run_autodebug.py" --create-project MyProj --mcu stm32f407zg  # 零依赖建全新 HAL 工程
 python "KIT/run_autodebug.py" --project MDK-ARM/App.uvprojx              # 完整闭环
 python "KIT/run_autodebug.py" --project MDK-ARM/App.uvprojx --json       # 机器可读
 python "KIT/run_autodebug.py" --project MDK-ARM/App.uvprojx --no-flash   # 只编译

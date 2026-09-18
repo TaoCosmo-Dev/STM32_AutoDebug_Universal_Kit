@@ -80,10 +80,6 @@ def main() -> int:
                              "for AI agents the default single-pass mode is correct)")
     parser.add_argument("--json", action="store_true", help="Print a machine-readable summary")
     parser.add_argument("--quiet", action="store_true", help="Suppress the streaming log")
-    parser.add_argument("--create-project", metavar="PROJECT_NAME",
-                        help="Scaffold a new STM32 HAL-based Keil project with zero dependencies")
-    parser.add_argument("--target-dir", default=".",
-                        help="Target directory for --create-project (default: current directory)")
     parser.add_argument("--list-devices", action="store_true", help="List probes and COM ports")
 
     project_edits = parser.add_argument_group(
@@ -112,27 +108,6 @@ def main() -> int:
     if args.list_devices:
         return cmd_list_devices()
 
-    if args.create_project:
-        from autodebug.project_creator import ProjectScaffolder
-        scaffolder = ProjectScaffolder()
-        mcu = args.mcu or "stm32f407zg"
-        proj_dir = scaffolder.scaffold(args.create_project, mcu=mcu, target_dir=args.target_dir)
-        rel_dir = os.path.relpath(proj_dir, os.getcwd())
-        proj_base = os.path.basename(proj_dir.rstrip("\\/"))
-        uvprojx_rel = os.path.join(rel_dir, "MDK-ARM", f"{proj_base}.uvprojx")
-        print("==================================================================")
-        print(f"  [+] 成功创建全新 STM32 HAL 库工程：{proj_base}")
-        print(f"  [+] 芯片型号  : {mcu.upper()}")
-        print(f"  [+] 工程目录  : {proj_dir}")
-        print(f"  [+] Keil 工程 : {uvprojx_rel}")
-        print("------------------------------------------------------------------")
-        print("  [💡 下一步验证指令]：")
-        print(f"     python run_autodebug.py --project \"{uvprojx_rel}\" --no-flash")
-        print("==================================================================")
-        return 0
-
-    # ---- locate the project ----------------------------------------------------------
-    proj_path = args.project
     if not proj_path:
         candidates = find_uvprojx(os.getcwd())
         if not candidates:

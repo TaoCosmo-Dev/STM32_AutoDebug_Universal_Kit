@@ -2,10 +2,10 @@
 
 ### 给 AI 装上手和眼睛：自己写代码、编译、烧录、上板跑、崩了自己查
 
-[![GitHub Release](https://img.shields.io/badge/Release-v2.2.1-blue?style=flat-square&logo=github)](https://github.com/TaoCosmo-Dev/STM32_AutoDebug_Universal_Kit/releases)
+[![GitHub Release](https://img.shields.io/badge/Release-v2.3.0-blue?style=flat-square&logo=github)](https://github.com/TaoCosmo-Dev/STM32_AutoDebug_Universal_Kit/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg?style=flat-square)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-STM32%20%7C%20Cortex--M-orange?style=flat-square)]()
-[![Tests](https://img.shields.io/badge/离线自测-79%20项通过-brightgreen?style=flat-square)]()
+[![Tests](https://img.shields.io/badge/离线自测-76%20项通过-brightgreen?style=flat-square)]()
 [![MCP](https://img.shields.io/badge/MCP-stdio%20server-purple?style=flat-square)]()
 
 AI 写嵌入式代码的瓶颈不是不会写，而是**没有反馈**：它看不到 Keil 的报错行号、不知道程序有没有真的跑起来、更不知道 HardFault 时 PC 停在哪。缺少判据，便只能反复试探，每改一版都要回头询问结果。
@@ -181,13 +181,11 @@ python install_skill.py --uninstall
 
 规范只有 `AGENTS.md` 一个文件（已存在且不是本套件生成的会保留不覆盖）。不生成 `.cursorrules`、`.clinerules` 这类各家专属副本 —— 同一份内容散成六份只会互相不同步。
 
-**还没有工程**：无需安装 STM32CubeMX，无需打开 Keil GUI，一条命令 1 秒从零生成**官方 HAL 库标准工程**（标准 `Core/`、`Drivers/`、`MDK-ARM/` 结构，直编译 0 Error，且自带闭环自愈脚本）：
+**还没有工程**：本套件不负责从零生成工程。先用任意方式拿到一个能编译的 Keil 工程 —— STM32CubeMX 导出、开发板附带的例程、或教程配套工程（江科大、正点原子等）都可以 —— 再按上面的方式接入。
 
-```bash
-python run_autodebug.py --create-project MyBlinky --mcu stm32f407zg
-```
+> 早期版本曾提供 `--create-project` 脚手架，**v2.3.0 已移除**。它依赖本机装有 STM32Cube_FW 固件包，而 Keil 的器件包（DFP）只带标准外设库、不含 HAL，于是在很常见的配置下会生成一个引用了不存在源文件、必然编译失败的工程。与其维护一个各芯片系列都要适配的脚手架，不如把范围收窄到本套件真正不可替代的事：**给已有工程补上反馈闭环**。
 
-工程建好之后的**所有**结构改动（加文件、加路径、加宏、开调试信息、装崩溃追踪器）都由 AI 用命令完成，全程不需你开 Keil。
+接入之后的**所有**结构改动（加文件、加路径、加宏、开调试信息、装崩溃追踪器）都由 AI 用命令完成，全程不需你开 Keil。
 
 ---
 
@@ -223,7 +221,6 @@ Claude Code、Cursor、Windsurf、Cline、Trae、通义灵码、Copilot、Aider�
 以下命令由 AI 自动调用，通常无需手动执行：
 
 ```bash
-python run_autodebug.py --create-project MyBlinky --mcu stm32f407zg # 零依赖一键建全新 HAL 工程
 python run_autodebug.py --project MDK-ARM/App.uvprojx        # 完整闭环
 python run_autodebug.py --project MDK-ARM/App.uvprojx --json # 机器可读
 python run_autodebug.py --list-devices                        # 列探针与串口

@@ -311,60 +311,6 @@ class TestConfigResilience(unittest.TestCase):
         self.assertEqual(cfg.loop.archive_dir, ".autodebug")
 
 
-class TestProjectScaffolder(unittest.TestCase):
-    def test_resolve_mcu_profile_known_chips(self):
-        from autodebug.project_creator import resolve_mcu_profile
-        p1 = resolve_mcu_profile("stm32f407zg")
-        self.assertEqual(p1.family, "f4")
-        self.assertIn("STM32F407", p1.device_name)
-        self.assertEqual(p1.defines, "USE_HAL_DRIVER,STM32F407xx")
-
-        p2 = resolve_mcu_profile("STM32F103C8T6")
-        self.assertEqual(p2.family, "f1")
-        self.assertIn("STM32F103", p2.device_name)
-
-        p3 = resolve_mcu_profile("stm32f401cc")
-        self.assertEqual(p3.family, "f4")
-
-    def test_resolve_mcu_profile_unknown_raises(self):
-        from autodebug.project_creator import resolve_mcu_profile
-        with self.assertRaises(ValueError):
-            resolve_mcu_profile("unknown_chip_xyz999")
-
-    def test_scaffold_project_creates_structure_and_valid_xml(self):
-        from autodebug.project_creator import ProjectScaffolder
-        with tempfile.TemporaryDirectory() as tmpdir:
-            scaffolder = ProjectScaffolder()
-            proj_dir = scaffolder.scaffold(
-                project_name="TestHALApp",
-                mcu="stm32f407zg",
-                target_dir=tmpdir,
-            )
-            uvprojx_path = os.path.join(proj_dir, "MDK-ARM", "TestHALApp.uvprojx")
-            self.assertTrue(os.path.exists(uvprojx_path))
-
-            # Verify directory hierarchy
-            self.assertTrue(os.path.exists(os.path.join(proj_dir, "Core", "Inc", "main.h")))
-            self.assertTrue(os.path.exists(os.path.join(proj_dir, "Core", "Inc", "stm32f4xx_hal_conf.h")))
-            self.assertTrue(os.path.exists(os.path.join(proj_dir, "Core", "Src", "main.c")))
-            self.assertTrue(os.path.exists(os.path.join(proj_dir, "Core", "Src", "stm32f4xx_it.c")))
-            self.assertTrue(os.path.exists(os.path.join(proj_dir, "Core", "Src", "stm32f4xx_hal_msp.c")))
-            self.assertTrue(os.path.exists(os.path.join(proj_dir, "AGENTS.md")))
-            self.assertTrue(os.path.exists(os.path.join(proj_dir, "run_autodebug.py")))
-
-            # Verify main.c contains pass token and cm_backtrace_init
-            with open(os.path.join(proj_dir, "Core", "Src", "main.c"), "r", encoding="utf-8") as f:
-                content = f.read()
-                self.assertIn("[ALL TESTS PASSED]", content)
-                self.assertIn("cm_backtrace_init()", content)
-                self.assertIn("HAL_Init()", content)
-
-            # Verify XML validity of .uvprojx
-            tree = ET.parse(uvprojx_path)
-            root = tree.getroot()
-            self.assertIsNotNone(root.find(".//TargetName"))
-            self.assertEqual(root.find(".//TargetName").text, "TestHALApp")
-
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

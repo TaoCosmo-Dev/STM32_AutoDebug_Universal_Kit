@@ -36,7 +36,7 @@ from autodebug.serial_monitor import SerialMonitor
 from autodebug.symbol_resolver import SymbolResolver
 
 PROTOCOL_VERSION = "2024-11-05"
-SERVER_INFO = {"name": "stm32-autodebug", "version": "2.2.1"}
+SERVER_INFO = {"name": "stm32-autodebug", "version": "2.3.0"}
 
 
 def log(msg: str) -> None:
@@ -221,43 +221,8 @@ def tool_check_firmware(args):
     return {"satisfied": not problems, "problems": problems}
 
 
-def tool_create_project(args: Dict[str, Any]) -> Dict[str, Any]:
-    from autodebug.project_creator import ProjectScaffolder
-    scaffolder = ProjectScaffolder()
-    project_name = args["project_name"]
-    mcu = args.get("mcu", "stm32f407zg")
-    target_dir = args.get("target_dir", ".")
-    proj_dir = scaffolder.scaffold(project_name, mcu=mcu, target_dir=target_dir)
-    proj_base = os.path.basename(proj_dir.rstrip("\\/"))
-    uvprojx_path = os.path.join(proj_dir, "MDK-ARM", f"{proj_base}.uvprojx")
-    return {
-        "success": True,
-        "project_name": proj_base,
-        "mcu": mcu,
-        "project_dir": proj_dir,
-        "uvprojx_path": uvprojx_path,
-        "message": f"Successfully created HAL project {proj_base} at {proj_dir}",
-    }
-
 
 TOOLS: List[Dict[str, Any]] = [
-    {
-        "name": "stm32_create_project",
-        "description": "Scaffold a complete, zero-dependency STM32 project using the official HAL library "
-                       "(CubeMX-standard directory structure: Core/, Drivers/, MDK-ARM/) with Keil MDK project "
-                       "files and the AutoDebug closed loop. Compiles immediately with 0 Error without STM32CubeMX installed.",
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "project_name": {"type": "string", "description": "Project name (e.g. MyBlinky)"},
-                "mcu": {"type": "string", "description": "Target MCU model (e.g. stm32f407zg, stm32f103c8, etc.)"},
-                "target_dir": {"type": "string", "description": "Directory to generate project in (default: project_name in cwd)"},
-                "keil_pack_root": {"type": "string", "description": "Path to Keil Pack directory (auto-detected if omitted)"},
-            },
-            "required": ["project_name"],
-        },
-        "handler": tool_create_project,
-    },
     {
         "name": "stm32_list_devices",
         "description": "List connected SWD debug probes and serial ports. Call this first when "
