@@ -9,7 +9,7 @@ echo   STM32 全自动开发套件 - 环境初始化
 echo =======================================================
 echo.
 
-:: ---------------------------------------------------------------- 1/4 Python
+:: ---------------------------------------------------------------- 1/5 Python
 set "PY=python"
 python --version >nul 2>&1
 if %ERRORLEVEL% NEQ 0 (
@@ -40,12 +40,12 @@ if %ERRORLEVEL% NEQ 0 (
     )
 )
 
-echo [1/4] Python: %PY%
+echo [1/5] Python: %PY%
 "%PY%" --version
 
-:: ---------------------------------------------------------------- 2/4 依赖
+:: ---------------------------------------------------------------- 2/5 依赖
 echo.
-echo [2/4] 正在安装 Python 依赖库（清华镜像，快）...
+echo [2/5] 正在安装 Python 依赖库（清华镜像，快）...
 "%PY%" -m pip install -i https://pypi.tuna.tsinghua.edu.cn/simple --trusted-host pypi.tuna.tsinghua.edu.cn -r requirements.txt
 if %ERRORLEVEL% NEQ 0 (
     echo.
@@ -58,15 +58,15 @@ if %ERRORLEVEL% NEQ 0 (
     )
 )
 
-:: ---------------------------------------------------------------- 3/4 芯片包
+:: ---------------------------------------------------------------- 3/5 芯片包
 echo.
-echo [3/4] 正在安装常用 STM32 芯片支持包...
+echo [3/5] 正在安装常用 STM32 芯片支持包...
 echo       （装不全没关系，用到哪个会自动下载）
 "%PY%" -m pyocd pack install stm32f0 stm32f1 stm32f3 stm32f4 stm32f7 stm32g0 stm32g4 stm32h7 stm32l4 stm32c0 >nul 2>&1
 
-:: ---------------------------------------------------------------- 4/4 自检
+:: ---------------------------------------------------------------- 4/5 自检
 echo.
-echo [4/4] 自检：工具链 / 探针 / 串口 / 离线单元测试
+echo [4/5] 自检：工具链 / 探针 / 串口 / 离线单元测试
 echo.
 "%PY%" -m unittest discover -s tests -q
 if %ERRORLEVEL% NEQ 0 (
@@ -78,10 +78,17 @@ echo.
 "%PY%" run_autodebug.py --list-devices
 
 echo.
+echo [5/5] 安装 Agent Skill（让 AI 在任意工程里自动加载本套件）
+"%PY%" "%~dp0install_skill.py"
+
+echo.
 echo =======================================================
 echo   [READY] 这台电脑已具备 编译 / 烧录 / 自愈调试 能力
 echo.
-echo   下一步：把你的工程文件夹拖到 inject_to_project.bat 上
+echo   下一步：用 AI 编辑器打开任意 Keil 工程，直接说需求即可。
+echo   （不需要注入，不需要开场白 —— Skill 已全局生效）
+echo.
+echo   仍想把工具链随工程提交 git？把工程文件夹拖到 inject_to_project.bat
 echo.
 echo   （进阶）MCP 服务端路径，填进 AI 编辑器的 MCP 配置：
 echo     %~dp0mcp_server.py
