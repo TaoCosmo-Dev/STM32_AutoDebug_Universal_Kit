@@ -50,6 +50,47 @@ EXIT_CODES = {
 }
 
 
+def fresh_loop_state() -> dict:
+    """The zero value for the persisted stall-tracking state."""
+    return {"iteration": 0, "last_signature": None, "repeat_count": 0,
+            "recent_signatures": []}
+
+
+def fold_iteration_outcome(state: dict, signature: str, passed: bool,
+                           threshold: int = 2, window: int = 6):
+    """Fold one iteration's result into the stall-tracking state.
+
+    Pure function -- no disk, no hardware -- so the escalation policy is testable
+    without a board. Returns ``(new_state, repeated_failure, stalled)``.
+
+    Counting only back-to-back repeats is not enough. The usual way an AI gets stuck is
+    not hammering one error, it is oscillating: fix A, that breaks B, fix B, A returns.
+    A consecutive-only counter resets every round, so the loop would burn every
+    remaining iteration before escalating. We therefore also count how often a signature
+    appears across the last `window` iterations. A signature is specific enough
+    (file:line:code:message, or fault type + PC + CFSR) that seeing the very same one
+    again really does mean the previous patch achieved nothing.
+    """
+    if passed:
+        return fresh_loop_state(), False, False
+
+    consecutive = (state.get("repeat_count", 0) + 1
+                   if signature == state.get("last_signature") else 1)
+    recent = list(state.get("recent_signatures") or [])
+    recent.append(signature)
+    if window > 0:
+        recent = recent[-window:]
+
+    # max(): back-to-back repeats still count even if the window was trimmed short.
+    seen = max(consecutive, recent.count(signature))
+
+    new_state = dict(state)
+    new_state["last_signature"] = signature
+    new_state["repeat_count"] = consecutive
+    new_state["recent_signatures"] = recent
+    return new_state, seen >= 2, seen >= threshold
+
+
 @dataclass
 class LoopResult:
     success: bool
@@ -94,17 +135,19 @@ class AutoDebugEngine:
     def _load_state(self, proj_dir: str) -> dict:
         path = os.path.join(proj_dir, self.config.loop.archive_dir, "state.json")
         if not os.path.exists(path):
-            return {"iteration": 0, "last_signature": None, "repeat_count": 0}
+            return fresh_loop_state()
         try:
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
+            recent = data.get("recent_signatures")  # absent in states written before v2.2
             return {
                 "iteration": int(data.get("iteration", 0)),
                 "last_signature": data.get("last_signature"),
                 "repeat_count": int(data.get("repeat_count", 0)),
+                "recent_signatures": list(recent) if isinstance(recent, list) else [],
             }
         except Exception:
-            return {"iteration": 0, "last_signature": None, "repeat_count": 0}
+            return fresh_loop_state()
 
     def _save_state(self, proj_dir: str, state: dict) -> None:
         try:
@@ -355,15 +398,13 @@ class AutoDebugEngine:
                 last_report = report
 
                 # ---- stall detection ------------------------------------------------
-                if report.signature == state.get("last_signature") and report.status != STATUS_PASSED:
-                    state["repeat_count"] = state.get("repeat_count", 0) + 1
-                else:
-                    state["repeat_count"] = 1
-                state["last_signature"] = report.signature
-                report.repeated_failure = state["repeat_count"] >= 2
+                state, report.repeated_failure, stalled = fold_iteration_outcome(
+                    state, report.signature,
+                    passed=report.status == STATUS_PASSED,
+                    threshold=self.config.loop.stall_threshold,
+                    window=self.config.loop.stall_window)
 
                 if report.status == STATUS_PASSED:
-                    state = {"iteration": 0, "last_signature": None, "repeat_count": 0}
                     self._save_state(proj_dir, state)
                     report_path = self._persist_report(proj_dir, report)
                     return LoopResult(True, iterations_run, STATUS_PASSED, report, report_path, messages)
@@ -372,10 +413,11 @@ class AutoDebugEngine:
                 self._save_state(proj_dir, state)
                 self._log(f"[!] 诊断报告已写入：{report_path}")
 
-                stalled = state["repeat_count"] >= self.config.loop.stall_threshold
                 if stalled:
-                    msg = (f"同一个失败已连续出现 {state['repeat_count']} 次"
-                           f"（{report.signature}）。停止自动修复，交由人工判断，"
+                    times = max(state["repeat_count"],
+                                state["recent_signatures"].count(report.signature))
+                    msg = (f"同一个失败在最近 {len(state['recent_signatures'])} 轮里出现了 "
+                           f"{times} 次（{report.signature}）。停止自动修复，交由人工判断，"
                            f"避免继续消耗迭代次数做无效改动。")
                     messages.append(msg)
                     self._log(f"[x] 卡住了：{msg}")

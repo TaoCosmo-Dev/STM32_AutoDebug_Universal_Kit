@@ -194,6 +194,10 @@ class LoopConfig:
     archive_reports: bool = True         # keep every iteration, not just the last
     archive_dir: str = ".autodebug"
     stall_threshold: int = 2             # identical failure signature N times -> escalate
+    stall_window: int = 6                # ...counted across the last N iterations, not only
+                                         # back to back. Without this an AI that alternates
+                                         # between two wrong fixes (A/B/A/B) resets the
+                                         # counter every round and never trips the brake.
     halt_target_on_finish: bool = False  # leave the board running after a green run
 
 

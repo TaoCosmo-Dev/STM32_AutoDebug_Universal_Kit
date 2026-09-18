@@ -1,0 +1,70 @@
+name: tests
+
+# The offline suite needs no board, no Keil and no serial port, so it can gate every
+# push and pull request. Anything that does need hardware stays out of it by design.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  offline:
+    # Windows because the toolkit drives Keil MDK, which is Windows-only. The offline
+    # tests themselves are portable, but running them where the tool actually runs is
+    # what keeps path handling honest (separators, USERPROFILE, case-insensitivity).
+    runs-on: windows-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip && pip install -r requirements.txt
+
+      - name: Offline test suite
+        run: python -m unittest discover -s tests -v
+
+      - name: Skill installer is importable and self-consistent
+        # Catches a missing template or a broken placeholder without touching the
+        # runner's home directory.
+        run: python install_skill.py --list
+
+      - name: Version number agrees across the repo
+        shell: pwsh
+        run: |
+          $v = python -c "import autodebug; print(autodebug.__version__)"
+          Write-Host "autodebug.__version__ = $v"
+          $bad = $false
+          if (-not (Select-String -Path README.md -SimpleMatch "Release-v$v-" -Quiet)) {
+            Write-Host "::error file=README.md::README 徽章与 autodebug.__version__ ($v) 不一致"
+            $bad = $true
+          }
+          if (-not (Select-String -Path mcp_server.py -SimpleMatch "`"version`": `"$v`"" -Quiet)) {
+            Write-Host "::error file=mcp_server.py::SERVER_INFO 版本与 autodebug.__version__ ($v) 不一致"
+            $bad = $true
+          }
+          if ($bad) { exit 1 }
+
+      - name: Test-count badge matches the suite
+        shell: pwsh
+        run: |
+          $out = python -m unittest discover -s tests 2>&1 | Out-String
+          if ($out -notmatch "Ran (\d+) tests") {
+            Write-Host "::error::无法从测试输出中解析用例数"; exit 1
+          }
+          $n = $Matches[1]
+          Write-Host "实际用例数 = $n"
+          if (-not (Select-String -Path README.md -SimpleMatch "离线自测-$n%20项通过" -Quiet)) {
+            Write-Host "::error file=README.md::徽章上的用例数与实际 ($n) 不一致"
+            exit 1
+          }
