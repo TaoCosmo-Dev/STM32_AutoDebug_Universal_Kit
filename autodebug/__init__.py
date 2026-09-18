@@ -8,7 +8,7 @@ Closed-loop firmware build, flash, run, diagnose and AI repair for Cortex-M targ
     result = engine.run_closed_loop("MDK-ARM/Project.uvprojx")
     print(result.final_status, result.exit_code)
 """
-__version__ = "2.3.1"
+__version__ = "2.3.2"
 
 from .config import AutoDebugConfig
 from .builder import BuildResult, CompilerMessage, KeilBuilder

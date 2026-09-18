@@ -50,8 +50,13 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 # ---------------------------------------------------------------- 3/5 CMSIS packs
-Write-Host "`n[3/5] 安装 CMSIS 器件支持包（缺失的包 pyocd 之后会按需自动下载）..." -ForegroundColor Yellow
+if ($args -contains "--with-packs") {
+    Write-Host "`n[3/5] 正在预装常用 STM32 芯片支持包（约 250MB，请耐心等待）..." -ForegroundColor Yellow
 & $pyPath -m pyocd pack install stm32f0 stm32f1 stm32f3 stm32f4 stm32f7 stm32g0 stm32g4 stm32h7 stm32l4 stm32c0 *>$null
+} else {
+    Write-Host "`n[3/5] 芯片支持包：跳过预装（首次烧录时按需自动下载，约 20-60 秒）" -ForegroundColor Yellow
+    Write-Host "      需要一次性装齐以便离线使用，请运行： .\setup_env.ps1 --with-packs" -ForegroundColor DarkGray
+}
 
 # ---------------------------------------------------------------- 4/5 self-test
 Write-Host "`n[4/5] 自检：工具链 / 探针 / 串口 / 离线单元测试" -ForegroundColor Yellow

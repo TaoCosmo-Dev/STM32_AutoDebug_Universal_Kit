@@ -60,9 +60,15 @@ if %ERRORLEVEL% NEQ 0 (
 
 :: ---------------------------------------------------------------- 3/5 芯片包
 echo.
-echo [3/5] 正在安装常用 STM32 芯片支持包...
-echo       （装不全没关系，用到哪个会自动下载）
-"%PY%" -m pyocd pack install stm32f0 stm32f1 stm32f3 stm32f4 stm32f7 stm32g0 stm32g4 stm32h7 stm32l4 stm32c0 >nul 2>&1
+if /I "%~1"=="--with-packs" goto :install_packs
+echo [3/5] 芯片支持包：跳过预装（首次烧录时按需自动下载，约 20-60 秒）
+echo       需要一次性装齐以便离线使用，请运行：setup_env.bat --with-packs
+goto :after_packs
+
+:install_packs
+echo [3/5] 正在预装常用 STM32 芯片支持包（约 250MB，请耐心等待）...
+"%PY%" -m pyocd pack install stm32f0 stm32f1 stm32f3 stm32f4 stm32f7 stm32g0 stm32g4 stm32h7 stm32l4 stm32c0
+:after_packs
 
 :: ---------------------------------------------------------------- 4/5 自检
 echo.
