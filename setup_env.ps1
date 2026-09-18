@@ -8,8 +8,8 @@ Write-Host "====================================================================
 Write-Host "  STM32 AutoDebug Universal Kit - 环境初始化" -ForegroundColor Cyan
 Write-Host "=====================================================================" -ForegroundColor Cyan
 
-# ---------------------------------------------------------------- 1/4 Python
-Write-Host "`n[1/4] 检测 Python ..." -ForegroundColor Yellow
+# ---------------------------------------------------------------- 1/5 Python
+Write-Host "`n[1/5] 检测 Python ..." -ForegroundColor Yellow
 $pyPath = $null
 $cmd = Get-Command python -ErrorAction SilentlyContinue
 if ($cmd) {
@@ -36,8 +36,8 @@ if (-not $pyPath) {
 Write-Host "  找到 Python: $pyPath" -ForegroundColor Green
 & $pyPath --version
 
-# ---------------------------------------------------------------- 2/4 dependencies
-Write-Host "`n[2/4] 安装 Python 依赖（清华镜像）..." -ForegroundColor Yellow
+# ---------------------------------------------------------------- 2/5 dependencies
+Write-Host "`n[2/5] 安装 Python 依赖（清华镜像）..." -ForegroundColor Yellow
 & $pyPath -m pip install -i https://pypi.tuna.tsinghua.edu.cn/simple --trusted-host pypi.tuna.tsinghua.edu.cn -r requirements.txt
 if ($LASTEXITCODE -ne 0) {
     Write-Host "  镜像失败，改用官方 PyPI ..." -ForegroundColor Yellow
@@ -49,12 +49,12 @@ if ($LASTEXITCODE -ne 0) {
     }
 }
 
-# ---------------------------------------------------------------- 3/4 CMSIS packs
-Write-Host "`n[3/4] 安装 CMSIS 器件支持包（缺失的包 pyocd 之后会按需自动下载）..." -ForegroundColor Yellow
+# ---------------------------------------------------------------- 3/5 CMSIS packs
+Write-Host "`n[3/5] 安装 CMSIS 器件支持包（缺失的包 pyocd 之后会按需自动下载）..." -ForegroundColor Yellow
 & $pyPath -m pyocd pack install stm32f0 stm32f1 stm32f3 stm32f4 stm32f7 stm32g0 stm32g4 stm32h7 stm32l4 stm32c0 *>$null
 
-# ---------------------------------------------------------------- 4/4 self-test
-Write-Host "`n[4/4] 自检：工具链 / 探针 / 串口 / 离线单元测试" -ForegroundColor Yellow
+# ---------------------------------------------------------------- 4/5 self-test
+Write-Host "`n[4/5] 自检：工具链 / 探针 / 串口 / 离线单元测试" -ForegroundColor Yellow
 & $pyPath -m unittest discover -s tests -q
 if ($LASTEXITCODE -ne 0) {
     Write-Host "  [!] 离线单元测试有失败项，详见上方输出。" -ForegroundColor Yellow
@@ -63,9 +63,14 @@ if ($LASTEXITCODE -ne 0) {
 & $pyPath -c "from autodebug.config import AutoDebugConfig; c=AutoDebugConfig.load(); print('  Keil UV4   :', c.keil.uv4_path or 'NOT FOUND - 请安装 Keil MDK'); print('  fromelf    :', c.keil.fromelf_path or 'not found')"
 & $pyPath run_autodebug.py --list-devices
 
+Write-Host "`n[5/5] 安装 Agent Skill（让 AI 在任意工程里自动加载本套件）" -ForegroundColor Yellow
+& $pyPath install_skill.py
+
 Write-Host "`n=====================================================================" -ForegroundColor Cyan
 Write-Host " [环境就绪] 这台电脑已具备 编译 / 烧录 / 自愈调试 能力" -ForegroundColor Green
-Write-Host " 下一步：把工程文件夹拖到 inject_to_project.bat" -ForegroundColor Yellow
+Write-Host " 下一步：用 AI 编辑器打开任意 Keil 工程，直接说需求即可" -ForegroundColor Yellow
+Write-Host " （不需要注入，不需要开场白 —— Skill 已全局生效）" -ForegroundColor DarkGray
+Write-Host " 仍想把工具链随工程提交 git？把工程文件夹拖到 inject_to_project.bat" -ForegroundColor DarkGray
 Write-Host " MCP 服务端路径（Claude Code / Cursor / Windsurf 配置用）：" -ForegroundColor Yellow
 Write-Host "   $PSScriptRoot\mcp_server.py" -ForegroundColor White
 Write-Host "=====================================================================" -ForegroundColor Cyan

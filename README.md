@@ -119,6 +119,15 @@ cd STM32_AutoDebug_Universal_Kit
 
 三行都有内容就绪。`NOT FOUND` / 探针为空 / 串口为空，分别对应 Keil 未装、调试器未插或被占用、缺 USB-UART 驱动。
 
+最后一步它会装上 **Agent Skill**，这样**任何工程都不用再注入**：
+
+```
+[5/5] 安装 Agent Skill（让 AI 在任意工程里自动加载本套件）
+  [*] 已安装  C:\Users\you\.agents\skills     共享约定（Cursor / Codex CLI / Gemini CLI）
+  [*] 已链接  C:\Users\you\.claude\skills     Claude Code / Claude Desktop
+  [*] 已链接  C:\Users\you\.cursor\skills     Cursor
+```
+
 > **不需要改配置文件。** Keil 装在哪个盘、用 ST-Link 还是 DAP-Link、串口是 COM3 还是 COM12，全部自动识别；
 > 配置里写死的路径在本机不存在时也会自动回退到探测结果，所以同一份配置换台电脑照样能用。
 
@@ -126,7 +135,40 @@ cd STM32_AutoDebug_Universal_Kit
 
 ## 接入工程
 
-**已有 Keil 工程**：把工程文件夹拖到 `inject_to_project.bat` 上。
+### 路线 A：免注入（推荐，装一次管所有工程）
+
+`setup_env` 跑完就已经生效了 —— **什么都不用做**。用 AI 编辑器打开任意 Keil 工程，直接说需求：
+
+```
+我要用 DHT11 读温湿度，串口打印，LED 每秒闪一次。
+```
+
+AI 会自己加载规范、追问硬件参数、给接线表、然后跑闭环。**不需要注入，不需要开场白。**
+
+原理：引擎的所有路径都从 `--project` 推导（诊断报告、`.autodebug/` 状态、`mcu_support/` 拷贝目标都落在目标工程里），
+配置有 `显式 --config > 工程内 autodebug.config.yaml > 套件内置默认` 的回退链 —— 所以引擎**本来就不需要待在工程里**。
+注入唯一真正提供的是「把 AGENTS.md 放到 AI 读得到的地方」，而这正是 Agent Skill 的职责。
+
+单独管理 Skill：
+
+```bash
+python install_skill.py            # 安装 / 刷新（换了套件位置后重跑）
+python install_skill.py --list     # 看装在哪些位置
+python install_skill.py --uninstall
+```
+
+> Skill 装的是**指针**而不是规则副本 —— 它只告诉 AI「去读 AGENTS.md」。
+> 规范始终只有 `AGENTS.md` 一份，不会出现多份副本互相不同步。
+>
+> `SKILL.md` 是开放标准，Claude Code / Cursor / Codex CLI / Gemini CLI / Cline / Windsurf /
+> Copilot / Zed 等都能读，所以一次安装覆盖整套工具链。
+
+### 路线 B：注入到工程（可选）
+
+这两种情况仍然需要它 —— ① 想把工具链**随工程一起提交 git**，让队友 clone 就能用；
+② 用的编辑器版本还不支持 Agent Skill（这时靠工程里的 `AGENTS.md` + 开场白「读一下 AGENTS.md」生效）。
+
+把工程文件夹拖到 `inject_to_project.bat` 上。
 
 ```
   [+] AGENTS.md（AI 规范，开场白里让 AI 读它即可）
@@ -151,7 +193,13 @@ python run_autodebug.py --create-project MyBlinky --mcu stm32f407zg
 
 ## 用法
 
-用 AI 编辑器打开注入后的工程目录，开场白：
+用 AI 编辑器打开工程目录，直接说需求：
+
+```
+我想做：<你的需求，说人话即可>
+```
+
+**走路线 B（注入）或编辑器不支持 Skill 时**，加一句开场白让它读规范：
 
 ```
 读一下 AGENTS.md，按里面的规范来。
@@ -277,7 +325,9 @@ python run_autodebug.py --project MDK-ARM/App.uvprojx --install-tracer --uart US
 
 ```
 ├── setup_env.bat / .ps1        # 环境初始化 + 自检
-├── inject_to_project.bat / .py # 工程注入器
+├── inject_to_project.bat / .py # 工程注入器（路线 B，可选）
+├── install_skill.py            # Agent Skill 安装器（路线 A，免注入）
+├── skills/stm32-autodebug/     # SKILL.md 模板（指向 AGENTS.md 的指针，非规则副本）
 ├── run_autodebug.py            # 闭环运行器（退出码即契约）
 ├── mcp_server.py               # MCP stdio 服务端（7 个工具）
 ├── AGENTS.md                   # AI 开发规范（唯一的规则文件，注入到工程里）
