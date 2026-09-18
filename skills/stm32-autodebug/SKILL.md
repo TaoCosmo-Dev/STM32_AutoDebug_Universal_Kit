@@ -1,6 +1,6 @@
 ---
 name: stm32-autodebug
-description: STM32 / Cortex-M 固件的编译、烧录、上板验证与崩溃归因闭环。当任务涉及以下任一情况时使用：改动或新建 STM32 固件源码（main.c、驱动、HAL 代码）；Keil MDK 工程（.uvprojx）；要求编译、烧录、下载、上板跑、验证固件；板子出现 HardFault、跑飞、死机、复位、串口无输出、卡死；要从零创建 STM32 工程；或工作目录下存在 run_autodebug.py / autodebug.config.yaml / autodebug/ 目录。也用于用户点名"自动调试套件""AutoDebug""闭环调试"时。仅适用于 STM32 / Cortex-M + Keil MDK（Windows），不适用于 ESP32、Arduino、树莓派等其它平台。
+description: STM32 / Cortex-M 固件的编译、烧录、上板验证与崩溃归因闭环。当任务涉及以下任一情况时使用：改动或新建 STM32 固件源码（main.c、驱动、HAL 代码）；Keil MDK 工程（.uvprojx）；要求编译、烧录、下载、上板跑、验证固件；板子出现 HardFault、跑飞、死机、复位、串口无输出、卡死；或工作目录下存在 run_autodebug.py / autodebug.config.yaml / autodebug/ 目录。也用于用户点名"自动调试套件""AutoDebug""闭环调试"时。仅适用于 STM32 / Cortex-M + Keil MDK（Windows），不适用于 ESP32、Arduino、树莓派等其它平台。
 ---
 
 # STM32 全自动调试套件
