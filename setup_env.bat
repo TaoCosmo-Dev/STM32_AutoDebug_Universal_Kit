@@ -1,4 +1,4 @@
-@echo off
+﻿@echo off
 chcp 65001 >nul
 setlocal enabledelayedexpansion
 title STM32 全自动开发套件 - 环境初始化
@@ -10,11 +10,41 @@ echo =======================================================
 echo.
 
 :: ---------------------------------------------------------------- 1/5 Python
-set "PY=python"
+:: NOTE: this file MUST stay UTF-8 *with* BOM. Without one, cmd.exe reads the
+:: batch in fixed-size blocks and a multi-byte character straddling a block
+:: boundary gets torn in half -- the tail of the line is then run as a command
+:: ("'xxx' is not recognized"). Which line breaks depends purely on byte offsets,
+:: so any edit anywhere can silently break a different line. Verified: without a
+:: BOM 1 of 11 padding offsets failed; with a BOM, 0 of 11.
+:: tests/test_setup_scripts.py guards this.
+::
+:: The 3.10 floor comes from pyelftools 0.33+ (DWARF line tables, crash address
+:: to source line). This kit's own code uses no 3.10-only syntax.
+:: Checking only that python exists is not enough: on an older interpreter pip
+:: silently resolves an older pyelftools whose DWARF 5 support is weaker, so crash
+:: attribution degrades without raising anything. Hence the explicit check below.
+:: Keep these comment lines ASCII and free of redirection characters -- cmd still
+:: scans a "::" line for them and would run whatever follows as a command.
+set "PY="
+set "PY_BAD="
+
 python --version >nul 2>&1
-if %ERRORLEVEL% NEQ 0 (
-    echo [!] PATH 里没有 python，正在常见安装位置查找...
-    set "PY="
+if %ERRORLEVEL% EQU 0 (
+    python -c "import sys; sys.exit(0 if sys.version_info >= (3,10) else 1)" >nul 2>&1
+    if !ERRORLEVEL! EQU 0 (
+        set "PY=python"
+    ) else (
+        for /f "delims=" %%V in ('python -c "import sys;print('.'.join(map(str,sys.version_info[:3])))" 2^>nul') do set "PY_BAD=%%V"
+        for /f "delims=" %%W in ('where python 2^>nul') do if not defined PY_WHERE set "PY_WHERE=%%W"
+    )
+)
+
+if not defined PY (
+    if defined PY_BAD (
+        echo [提示] PATH 里的 Python 是 !PY_BAD!，低于所需的 3.10，正在别处查找...
+    ) else (
+        echo [!] PATH 里没有 python，正在常见安装位置查找...
+    )
     for %%P in (
         "%LOCALAPPDATA%\Programs\Python\Python313\python.exe"
         "%LOCALAPPDATA%\Programs\Python\Python312\python.exe"
@@ -28,17 +58,32 @@ if %ERRORLEVEL% NEQ 0 (
     ) do (
         if not defined PY if exist %%P set "PY=%%~P"
     )
-    if not defined PY (
-        echo.
-        echo [错误] 没有装 Python 3.10 或更高版本。
-        echo.
-        echo   下载地址: https://www.python.org/downloads/
-        echo   ⚠ 安装时务必勾选 "Add python.exe to PATH"，不勾这个后面全白装。
-        echo.
-        pause
-        exit /b 1
-    )
 )
+
+if defined PY goto :py_ok
+
+echo.
+if defined PY_BAD echo [错误] 检测到 Python !PY_BAD!，低于本套件所需的 3.10。
+if defined PY_BAD echo        当前使用：!PY_WHERE!
+if not defined PY_BAD echo [错误] 没有找到 Python 3.10 或更高版本。
+echo.
+echo   为什么需要 3.10：崩溃定位依赖 pyelftools 解析 DWARF 调试信息，
+echo   该库 0.33 版起要求 Python 3.10。这是本套件唯一的版本下限来源。
+echo.
+echo   下载地址：https://www.python.org/downloads/
+echo   安装时务必勾选 "Add python.exe to PATH"，不勾这个后面全白装。
+echo.
+echo   已经装了新版却仍然报这个错？说明 PATH 里旧版排在前面。
+echo   打开「系统环境变量 → Path」，把新版 Python 的两条路径移到最上面。
+echo.
+pause
+exit /b 1
+
+:py_ok
+if not defined PY_BAD goto :py_done
+echo [提示] PATH 里的 Python 是 !PY_BAD!（不满足要求），已改用：!PY!
+echo     建议调整 PATH 顺序，否则其它工具仍会用到旧版。
+:py_done
 
 echo [1/5] Python: %PY%
 "%PY%" --version

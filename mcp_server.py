@@ -36,7 +36,7 @@ from autodebug.serial_monitor import SerialMonitor
 from autodebug.symbol_resolver import SymbolResolver
 
 PROTOCOL_VERSION = "2024-11-05"
-SERVER_INFO = {"name": "stm32-autodebug", "version": "2.3.2"}
+SERVER_INFO = {"name": "stm32-autodebug", "version": "2.3.3"}
 
 
 def log(msg: str) -> None:

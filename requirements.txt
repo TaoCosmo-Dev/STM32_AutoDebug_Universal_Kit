@@ -3,7 +3,12 @@
 #   (setup_env.bat / setup_env.ps1 do this for you, via a fast mirror)
 
 pyocd>=0.36          # SWD/JTAG flashing, halt/resume, core & SCB register access
-pyelftools>=0.30     # DWARF line tables: address -> source file:line
+pyelftools>=0.30     # DWARF line tables: address -> source file:line.
+                     # 0.33 onward requires Python >=3.10, and that is the ONLY
+                     # reason this kit needs 3.10 -- its own code uses no 3.10
+                     # syntax. On an older interpreter pip silently resolves to an
+                     # older pyelftools whose DWARF 5 support is weaker, so crash
+                     # attribution degrades without raising anything.
 pyserial>=3.5        # UART capture and COM port sniffing
 PyYAML>=6.0          # autodebug.config.yaml
 pylink-square>=1.2   # optional: J-Link backend (debugger.type: "jlink")

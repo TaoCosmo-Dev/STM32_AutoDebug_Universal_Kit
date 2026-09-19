@@ -1,4 +1,4 @@
-# STM32 AutoDebug Universal Kit - PowerShell environment setup
+﻿# STM32 AutoDebug Universal Kit - PowerShell environment setup
 # Usage:  powershell -ExecutionPolicy Bypass -File setup_env.ps1
 
 $ErrorActionPreference = "Continue"
@@ -10,11 +10,28 @@ Write-Host "====================================================================
 
 # ---------------------------------------------------------------- 1/5 Python
 Write-Host "`n[1/5] 检测 Python ..." -ForegroundColor Yellow
+# 版本下限 3.10 来自 pyelftools>=0.33（DWARF 行号表，崩溃地址 -> 源码行）。
+# 本套件自身的代码没有用到任何 3.10 专属语法。
+# 只检查 python 是否存在是不够的：装了旧版时 pip 会静默退回到老版 pyelftools，
+# 于是崩溃定位在 DWARF 5 上失准，且不报错。所以这里显式验版本。
+function Test-PyVersion($exe) {
+    try { & $exe -c "import sys; sys.exit(0 if sys.version_info >= (3,10) else 1)" 2>$null; return ($LASTEXITCODE -eq 0) }
+    catch { return $false }
+}
+function Get-PyVersion($exe) {
+    try { return (& $exe -c "import sys;print('.'.join(map(str,sys.version_info[:3])))" 2>$null) } catch { return $null }
+}
+
 $pyPath = $null
+$pyBad = $null
 $cmd = Get-Command python -ErrorAction SilentlyContinue
-if ($cmd) {
+if ($cmd -and (Test-PyVersion $cmd.Source)) {
     $pyPath = $cmd.Source
 } else {
+    if ($cmd) {
+        $pyBad = Get-PyVersion $cmd.Source
+        Write-Host "  [!] PATH 里的 Python 是 $pyBad（低于 3.10），正在别处查找 ..." -ForegroundColor Yellow
+    }
     $candidates = @(
         "$env:LOCALAPPDATA\Programs\Python\Python313\python.exe",
         "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe",
@@ -24,14 +41,31 @@ if ($cmd) {
         "C:\Python311\python.exe", "C:\Python310\python.exe",
         "D:\Python\python.exe"
     )
-    foreach ($c in $candidates) { if (Test-Path $c) { $pyPath = $c; break } }
+    foreach ($c in $candidates) { if ((Test-Path $c) -and (Test-PyVersion $c)) { $pyPath = $c; break } }
 }
 
 if (-not $pyPath) {
-    Write-Host "[ERROR] 未找到 Python 3.10+，请先安装：https://www.python.org/downloads/" -ForegroundColor Red
-    Write-Host "        安装时务必勾选 'Add python.exe to PATH'" -ForegroundColor Red
+    if ($pyBad) {
+        Write-Host "`n[ERROR] 检测到 Python $pyBad，但本套件需要 3.10 或更高版本。" -ForegroundColor Red
+        Write-Host "        当前使用: $($cmd.Source)" -ForegroundColor Red
+    } else {
+        Write-Host "`n[ERROR] 没有找到 Python 3.10 或更高版本。" -ForegroundColor Red
+    }
+    Write-Host ""
+    Write-Host "  为什么需要 3.10：崩溃定位依赖 pyelftools 解析 DWARF 调试信息，" -ForegroundColor Yellow
+    Write-Host "  该库 0.33 版起要求 Python 3.10+。这是本套件唯一的版本下限来源。" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "  下载地址: https://www.python.org/downloads/" -ForegroundColor Yellow
+    Write-Host "  安装时务必勾选 'Add python.exe to PATH'" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "  已经装了新版却仍显示旧版？说明 PATH 里旧版排在前面。" -ForegroundColor DarkGray
+    Write-Host "  打开「系统环境变量 -> Path」，把新版 Python 的两条路径上移到最前。" -ForegroundColor DarkGray
     Read-Host "按回车退出"
     exit 1
+}
+if ($pyBad) {
+    Write-Host "  [!] PATH 里的 Python 是 $pyBad（不满足要求），已改用：$pyPath" -ForegroundColor Yellow
+    Write-Host "      建议调整 PATH 顺序，否则其它工具仍会用到旧版。" -ForegroundColor DarkGray
 }
 Write-Host "  找到 Python: $pyPath" -ForegroundColor Green
 & $pyPath --version
