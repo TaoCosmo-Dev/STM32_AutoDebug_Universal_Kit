@@ -142,6 +142,7 @@ python run_autodebug.py --project MDK-ARM/App.uvprojx --check-firmware
 5. **结构体对齐**：通信协议结构体显式 1 字节对齐（`#pragma pack(1)` / `__attribute__((packed))`）。
 6. **硬件安全限流**：驱动 WS2812B 矩阵、电机、MOS 管前，软件层必须做全局电流与占空比限幅。
 7. **栈够用**：大数组不要放局部变量；`MSTKERR`/`STKERR` 就是栈溢出的直接证据。
+8. **AC5 下字符串字面量必须纯 ASCII**：`armcc` 按本机代码页解析源文件（中文 Windows 上是 GBK），UTF-8 中文串会报 `main.c(42): error: #8: missing closing quote`。**这个报错指向引号而不是编码，会把人引向语法排查，怎么查都查不出来**。中文只放注释里——注释不参与编译，不受影响。`--check-firmware` 会扫描并点名文件与行号。
 
 ---
 

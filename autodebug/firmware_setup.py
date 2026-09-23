@@ -255,4 +255,62 @@ def check_firmware_contract(project_root: str,
             "没有实现 cm_backtrace_putchar()，崩溃现场无法通过串口输出"
             "（跑 --install-tracer --uart <USARTx> --family <系列> 可自动生成）")
 
+    problems.extend(check_ac5_source_encoding(project_root))
+    return problems
+
+
+# armcc decodes source with the machine's ANSI code page, so a UTF-8 Chinese string
+# literal is read as mojibake and the parse ends at whatever byte happens to look like an
+# unbalanced quote. Non-ASCII in *comments* is harmless (the compiler skips them), so
+# only string and char literals are reported.
+_STRING_LITERAL = re.compile(r'"(?:[^"\\\n]|\\.)*"' r"|'(?:[^'\\\n]|\\.)*'")
+_LINE_COMMENT = re.compile(r"//[^\n]*")
+_BLOCK_COMMENT = re.compile(r"/\*.*?\*/", re.S)
+
+
+def check_ac5_source_encoding(project_root: str, max_report: int = 8) -> List[str]:
+    """Find non-ASCII string literals, which armcc (AC5) cannot compile.
+
+    AC5 parses source in the host ANSI code page -- GBK on a Chinese Windows. A UTF-8
+    Chinese literal therefore decodes to garbage and armcc reports:
+
+        main.c(42): error:  #8: missing closing quote
+
+    The message points at quoting, not at encoding, so the natural response is to stare
+    at the syntax and find nothing wrong with it. Cheap to detect, and not something a
+    user can reasonably be expected to guess.
+    """
+    problems: List[str] = []
+    hits: List[str] = []
+    for root, dirs, files in os.walk(project_root):
+        dirs[:] = [d for d in dirs
+                   if d not in {".git", "Objects", "Listings", ".autodebug", "__pycache__"}]
+        for name in files:
+            if not name.lower().endswith((".c", ".cpp", ".h")):
+                continue
+            path = os.path.join(root, name)
+            try:
+                with open(path, encoding="utf-8", errors="replace") as f:
+                    text = f.read()
+            except Exception:
+                continue
+            if text.isascii():
+                continue
+            stripped = _BLOCK_COMMENT.sub(" ", text)
+            stripped = _LINE_COMMENT.sub(" ", stripped)
+            for m in _STRING_LITERAL.finditer(stripped):
+                if m.group(0).isascii():
+                    continue
+                line = stripped.count("\n", 0, m.start()) + 1
+                hits.append(f"{os.path.relpath(path, project_root)}:{line}")
+                break                      # one hit per file is enough to act on
+
+    if hits:
+        shown = "、".join(hits[:max_report])
+        more = f" 等共 {len(hits)} 个文件" if len(hits) > max_report else ""
+        problems.append(
+            f"以下文件的字符串字面量含非 ASCII 字符：{shown}{more}。"
+            f"Keil AC5（armcc）按本机代码页解析源码（中文 Windows 上是 GBK），"
+            f"UTF-8 中文串会报 `#8: missing closing quote` —— 该报错指向引号而非编码，"
+            f"极易把人引向语法排查。请把中文移到注释里，字面量只用 ASCII。")
     return problems

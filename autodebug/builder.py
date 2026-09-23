@@ -18,6 +18,7 @@ from typing import List, Optional, Tuple
 import xml.etree.ElementTree as ET
 
 from .config import BuildConfig
+from .project_editor import iter_named_targets
 
 
 @dataclass
@@ -141,8 +142,6 @@ class KeilBuilder:
 
     # ---------------------------------------------------------------- project self-repair
 
-    _TARGET_BLOCK = re.compile(r"<Target>.*?</Target>", re.S)
-    _TARGET_NAME = re.compile(r"<TargetName>(.*?)</TargetName>", re.S)
     _DEBUG_INFO_OFF = re.compile(r"(<DebugInformation>)\s*0\s*(</DebugInformation>)")
     _CREATE_EXE = re.compile(r"(\s*)<CreateExecutable>")
 
@@ -185,24 +184,23 @@ class KeilBuilder:
         if text is None:
             return None
 
-        blocks = list(self._TARGET_BLOCK.finditer(text))
-        if not blocks:
+        # Shared with KeilProject on purpose: this used to be a second copy of the
+        # naive <Target>.*?</Target> regex, which a nested <Target> inside
+        # <DebugOption> truncates -- taking <CreateExecutable>, the insertion anchor
+        # below, out of the block. The edit then silently did nothing.
+        targets = list(iter_named_targets(text, target_name))
+        if not targets:
             return None
 
         out = []
         cursor = 0
         fixed: List[str] = []
-        for m in blocks:
-            block = m.group(0)
-            name_m = self._TARGET_NAME.search(block)
-            name = name_m.group(1).strip() if name_m else ""
-            if target_name and name != target_name:
-                continue
+        for start, end, block, name in targets:
             new_block, changed = self._patch_target_block(block)
             if changed:
-                out.append(text[cursor:m.start()])
+                out.append(text[cursor:start])
                 out.append(new_block)
-                cursor = m.end()
+                cursor = end
                 fixed.append(name or "(unnamed target)")
         if not fixed:
             return None
@@ -315,7 +313,13 @@ class KeilBuilder:
 
         start_time = time.time()
         try:
+            # encoding/errors are not optional here: text=True alone decodes the pipe
+            # with the local ANSI code page (GBK on a Chinese Windows), so a single
+            # non-GBK byte from UV4 raises UnicodeDecodeError and takes down the whole
+            # build as a Python traceback. config.log_encodings already handles this for
+            # the log file; the pipe needs the same treatment.
             proc = subprocess.run(cmd, capture_output=True, text=True,
+                                  encoding="utf-8", errors="replace",
                                   timeout=self.cfg.timeout_seconds)
             ret_code = proc.returncode
         except subprocess.TimeoutExpired:

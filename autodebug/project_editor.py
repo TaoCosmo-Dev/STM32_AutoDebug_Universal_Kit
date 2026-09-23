@@ -38,8 +38,47 @@ _EXT_FILETYPE = {
     ".lib": FILETYPE_LIBRARY, ".a": FILETYPE_LIBRARY,
 }
 
-_TARGET_BLOCK = re.compile(r"<Target>.*?</Target>", re.S)
 _TARGET_NAME = re.compile(r"<TargetName>(.*?)</TargetName>", re.S)
+_TARGET_OPEN = re.compile(r"<Target>")
+_TARGET_ANY = re.compile(r"<Target>|</Target>")
+
+
+def iter_target_spans(text: str):
+    """Yield (start, end) for every build target in a .uvprojx.
+
+    Why not the obvious ``<Target>.*?</Target>``: uVision nests a second <Target>
+    element inside <TargetOption><DebugOption>, and a non-greedy match stops at that
+    inner </Target>. The outer block then comes back truncated -- everything past the
+    nesting point is missing -- so an edit aimed at a tag beyond it lands nowhere and
+    the caller sees "no change needed" rather than an error.
+
+    Depth counting is correct regardless of nesting. Shared by KeilBuilder and
+    KeilProject so the two implementations cannot drift apart again.
+    """
+    consumed_to = 0
+    for opener in _TARGET_OPEN.finditer(text):
+        if opener.start() < consumed_to:
+            continue  # a <Target> nested inside one we already yielded
+        depth = 0
+        for tag in _TARGET_ANY.finditer(text, opener.start()):
+            depth += 1 if tag.group(0) == "<Target>" else -1
+            if depth == 0:
+                consumed_to = tag.end()
+                yield opener.start(), tag.end()
+                break
+
+
+def iter_named_targets(text: str, target_name=None):
+    """Yield (start, end, block, name) for targets matching `target_name` (all if None)."""
+    for start, end in iter_target_spans(text):
+        block = text[start:end]
+        m = _TARGET_NAME.search(block)
+        name = m.group(1).strip() if m else ""
+        if target_name and name != target_name:
+            continue
+        yield start, end, block, name
+
+
 _GROUP_BLOCK = re.compile(r"<Group>\s*<GroupName>(.*?)</GroupName>(.*?)</Group>", re.S)
 _DEBUG_INFO_OFF = re.compile(r"(<DebugInformation>)\s*0\s*(</DebugInformation>)")
 _CREATE_EXE = re.compile(r"(\s*)<CreateExecutable>")
@@ -106,22 +145,11 @@ class KeilProjectEditor:
     # ---------------------------------------------------------------- target helpers
 
     def target_names(self) -> List[str]:
-        names = []
-        for m in _TARGET_BLOCK.finditer(self.text):
-            n = _TARGET_NAME.search(m.group(0))
-            if n:
-                names.append(n.group(1).strip())
-        return names
+        return [name for _s, _e, _b, name in iter_named_targets(self.text) if name]
 
     def _iter_targets(self, target_name: Optional[str]):
         """Yield (start, end, block, name) for each target we should touch."""
-        for m in _TARGET_BLOCK.finditer(self.text):
-            block = m.group(0)
-            n = _TARGET_NAME.search(block)
-            name = n.group(1).strip() if n else ""
-            if target_name and name != target_name:
-                continue
-            yield m.start(), m.end(), block, name
+        return iter_named_targets(self.text, target_name)
 
     def _rewrite_targets(self, target_name: Optional[str], fn) -> None:
         """Apply fn(block, name) -> (new_block, note|None) to the selected targets."""

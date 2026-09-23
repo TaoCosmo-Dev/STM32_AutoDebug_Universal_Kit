@@ -2,10 +2,10 @@
 
 **面向 AI 代理的 STM32 闭环开发工具链**：编译、烧录、实机验证、崩溃归因，全部以命令行驱动，结果以退出码交付。
 
-[![GitHub Release](https://img.shields.io/badge/Release-v2.3.3-blue?style=flat-square&logo=github)](https://github.com/TaoCosmo-Dev/STM32_AutoDebug_Universal_Kit/releases)
+[![GitHub Release](https://img.shields.io/badge/Release-v2.4.0-blue?style=flat-square&logo=github)](https://github.com/TaoCosmo-Dev/STM32_AutoDebug_Universal_Kit/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg?style=flat-square)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-STM32%20%7C%20Cortex--M-orange?style=flat-square)]()
-[![Tests](https://img.shields.io/badge/离线自测-96%20项通过-brightgreen?style=flat-square)]()
+[![Tests](https://img.shields.io/badge/离线自测-114%20项通过-brightgreen?style=flat-square)]()
 [![MCP](https://img.shields.io/badge/MCP-stdio%20server-purple?style=flat-square)]()
 
 ---
@@ -367,7 +367,7 @@ cd STM32_AutoDebug_Universal_Kit
 | `mcu_support/` | `cm_backtrace_lite.c/.h`，运行于目标芯片的崩溃追踪器。安装追踪器时复制至工程并编译进固件 |
 | `templates/` | 硬件参数确认清单与接线指南模板，供代理在需求对齐阶段参考 |
 | `docs/ADVANCED.md` | 闭环时序、完整配置项、MCP 接入、架构说明 |
-| `tests/` | 96 项离线自测，无需硬件：`python -m unittest discover -s tests` |
+| `tests/` | 114 项离线自测，无需硬件：`python -m unittest discover -s tests` |
 
 ### 代理调用的常用命令
 
@@ -407,6 +407,8 @@ python run_autodebug.py --list-devices                             # 列出调�
 
 1. **通过令牌**：在测试通过路径上输出 `[ALL TESTS PASSED]`。未输出该令牌时闭环无法判定成功。
 2. **`cm_backtrace_init()`**：在 `main()` 的外设初始化之前调用，以启用子异常分类与除零陷阱。
+
+此外，`--check-firmware` 会扫描源码中含非 ASCII 字符的**字符串字面量**。Keil AC5（`armcc`）按本机代码页解析源文件（中文 Windows 上为 GBK），UTF-8 中文串会报 `#8: missing closing quote` —— 该报错指向引号而非编码，极易把排查引向语法方向。中文应只出现在注释中。
 
 执行 `--check-firmware` 将逐项列出未满足的条件。闭环超时时亦会自动附加该清单，并置于诊断报告 `next_actions` 的首位。
 
@@ -450,7 +452,8 @@ python run_autodebug.py --project MDK-ARM/App.uvprojx --install-tracer --uart US
 | 退出码 6 | Keil 未安装或路径不正确 | 安装 Keil，或在 `autodebug.config.yaml` 中指定 `keil.uv4_path` |
 | 编译过程被强制终止 | Keil 弹出模态对话框（缺少器件包、License 异常、工程被 IDE 占用） | 关闭 uVision，手动打开工程确认无弹窗 |
 | 退出码 2，未检测到探针 | 调试器未连接，或被 Keil / STM32CubeProgrammer 占用 | 以 `--list-devices` 确认；关闭占用程序 |
-| 退出码 2，`target type X not recognized` | 非硬件问题，为缺少 CMSIS 器件包 | 按报告提示安装对应器件包 |
+| 退出码 2，`target type X not recognized` | 非硬件问题，为缺少 CMSIS 器件包 | v2.4.0 起由 preflight 提前拦截，并直接给出 `python -m pyocd pack install <芯片>` |
+| 编译报 `#8: missing closing quote` 但引号无误 | 源码含 UTF-8 中文字面量，AC5 按 GBK 解析 | 中文只放注释；`--check-firmware` 会点名文件与行号 |
 | 退出码 2，无法连接目标 | 固件将 SWD 引脚复用为普通 IO，或芯片处于读保护状态 | 保持 `connect_mode: under-reset`；RDP Level 1 需整片擦除解锁 |
 | 退出码 4，串口无数据 | 串口重定向未实现、波特率不匹配、COM 口被占用 | 前两项由代理修复（`--check-firmware` 会明确指出）；关闭占用串口的调试助手 |
 | 退出码 4，有输出但无令牌 | 测试未到达输出点 | 先查看未满足的固件契约，再参考 CPU 存活遥测：PC 值不变表示停留在死等循环 |
@@ -478,7 +481,7 @@ python run_autodebug.py --project MDK-ARM/App.uvprojx --install-tracer --uart US
 ## 验证
 
 ```bash
-python -m unittest discover -s tests     # 96 项离线自测，无需硬件
+python -m unittest discover -s tests     # 114 项离线自测，无需硬件
 ```
 
 每次 push 与 Pull Request 由 GitHub Actions 在 Windows + Python 3.10 / 3.12 环境下自动执行，并校验版本号三处一致性与测试数量徽章。

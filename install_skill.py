@@ -93,6 +93,7 @@ AGENT_DIRS = [
     (".gemini", "Gemini CLI", False),
     (".codex", "Codex CLI（旧路径）", False),
     (".windsurf", "Windsurf", False),
+    (".workbuddy", "WorkBuddy", False),
     (".config/opencode", "OpenCode", False),
 ]
 

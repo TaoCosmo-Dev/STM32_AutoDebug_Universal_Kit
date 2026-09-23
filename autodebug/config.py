@@ -260,11 +260,61 @@ class AutoDebugConfig:
             source_path=config_path,
         )
 
-    def preflight(self) -> List[str]:
-        """Blocking problems; an empty list means the pipeline can run."""
+    def preflight(self, need_hardware: bool = False,
+                  target: Optional[str] = None) -> List[str]:
+        """Blocking problems; an empty list means the pipeline can run.
+
+        `need_hardware` adds the checks that only matter once we are going to touch the
+        board. Keep it False for --no-flash: a build-only run has no business demanding
+        a probe.
+
+        These used to be discovered mid-run, as a pyOCD exception several minutes in --
+        "Target type stm32f103c8 not recognized" after a successful compile, say. Both
+        are knowable before anything starts, and both have one exact fix, so each message
+        carries the command to run rather than a description of the problem.
+        """
         problems = []
         if not self.keil.uv4_path or not os.path.exists(self.keil.uv4_path):
             problems.append(
                 "Keil UV4.exe not found. Install Keil MDK, or set keil.uv4_path in autodebug.config.yaml."
             )
+        if not need_hardware:
+            return problems
+
+        # A preflight check must never be the thing that breaks the run, so every probe
+        # of the environment below stays silent on failure rather than guessing.
+        try:
+            from pyocd.core.helpers import ConnectHelper
+            if not ConnectHelper.get_all_connected_probes(blocking=False):
+                problems.append(
+                    "未检测到调试器。请插好 ST-Link / DAP-Link（SWDIO、SWCLK、GND、3V3），"
+                    "并关闭可能占用它的 Keil uVision 或 STM32CubeProgrammer，"
+                    "然后用 `--list-devices` 确认。")
+        except Exception:
+            pass
+
+        name = (target or self.debugger.target_override or "").strip().lower()
+        if name:
+            known = self._pyocd_knows_target(name)
+            if known is False:
+                problems.append(
+                    f"pyOCD 不认识芯片 {name}，缺少对应的 CMSIS 器件包。请先运行：\n"
+                    f"    python -m pyocd pack install {name}")
         return problems
+
+    @staticmethod
+    def _pyocd_knows_target(name: str) -> Optional[bool]:
+        """True / False, or None when pyOCD cannot be asked (never a blocking answer)."""
+        try:
+            from pyocd.target import TARGET
+            if name in TARGET:
+                return True
+        except Exception:
+            return None
+        try:
+            from pyocd.target.pack.pack_target import ManagedPacks
+            installed = {(getattr(t, "part_number", "") or "").lower()
+                         for t in ManagedPacks.get_installed_targets()}
+            return name in installed
+        except Exception:
+            return None

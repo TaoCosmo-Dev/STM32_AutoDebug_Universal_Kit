@@ -374,7 +374,17 @@ class AutoDebugEngine:
         proj_dir = os.path.dirname(uvprojx_path)
         messages: List[str] = []
 
-        problems = self.config.preflight()
+        # Resolve the chip before preflight so the device-pack check has something to
+        # check. This loop is going to touch hardware, so it asks for the full set: a
+        # missing probe or device pack is knowable right now, and discovering it several
+        # minutes in -- after a clean compile -- reads like a tool failure rather than
+        # the setup step it actually is.
+        detected = self.builder.get_device_name(uvprojx_path)
+        if detected and not self.config.debugger.target_override:
+            self.config.debugger.target_override = detected
+
+        problems = self.config.preflight(need_hardware=True,
+                                         target=self.config.debugger.target_override)
         if problems:
             for p in problems:
                 self._log(f"[x] {p}")
@@ -384,10 +394,6 @@ class AutoDebugEngine:
                 1, uvprojx_path)
             path = self._persist_report(proj_dir, report)
             return LoopResult(False, 0, STATUS_CONFIG_ERROR, report, path, problems)
-
-        detected = self.builder.get_device_name(uvprojx_path)
-        if detected and not self.config.debugger.target_override:
-            self.config.debugger.target_override = detected
 
         state = self._load_state(proj_dir)
         max_iters = self.config.test.max_repair_iterations

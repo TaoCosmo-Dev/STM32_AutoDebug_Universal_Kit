@@ -49,6 +49,9 @@ extern "C" {
 
 /* Provide HardFault_Handler (and the assembly shim that captures the frame). */
 #ifndef CM_BACKTRACE_PROVIDE_HANDLER
+/* == 1 means THIS FILE defines HardFault_Handler itself, so the empty stub in
+   stm32xxxx_it.c must be removed -- --install-tracer comments it out. Reads
+   backwards at a glance: it is not "the user provides a handler". */
 #define CM_BACKTRACE_PROVIDE_HANDLER   1
 #endif
 
