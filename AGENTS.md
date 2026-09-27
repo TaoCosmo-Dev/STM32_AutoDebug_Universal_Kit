@@ -84,12 +84,17 @@ python run_autodebug.py --project "MDK-ARM/YourProject.uvprojx"
 
 本套件不生成工程，也**不要自己手写 `.uvprojx`**，那是首次接入最大的耗时来源。
 
-- 芯片是 STM32F103C8(T6)：下载模板工程，解压即用。标准库、CMSIS、崩溃追踪器、通过令牌都已就位：
+- 芯片是 STM32F103C8(T6)：下载模板工程，解压即用。库、CMSIS、崩溃追踪器、通过令牌都已就位。
+  默认用 **HAL 版**（CubeMX 生成，带 `Template.ioc`）；用户明确说用标准库时才用标准库版：
 
   ```bash
-  curl.exe -L -o template.zip https://github.com/TaoCosmo-Dev/STM32_AutoDebug_Universal_Kit/releases/download/template-f103c8-v1.0/STM32F103C8_StdPeriph_Template.zip
+  curl.exe -L -o template.zip https://github.com/TaoCosmo-Dev/STM32_AutoDebug_Universal_Kit/releases/download/template-f103c8-hal-v1.0/STM32F103C8_HAL_Template.zip
+  # 标准库版：.../releases/download/template-f103c8-v1.0/STM32F103C8_StdPeriph_Template.zip
   tar -xf template.zip
   ```
+
+  HAL 工程里你写的代码必须放在 `/* USER CODE BEGIN ... */` 与 `/* USER CODE END ... */` 之间，
+  否则用户用 CubeMX 重新生成时会被覆盖。
 
 - 其他芯片：请用户提供一个能编译的 Keil 工程（CubeMX 导出 / 开发板例程均可）。
 

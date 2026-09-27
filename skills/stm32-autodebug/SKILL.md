@@ -35,13 +35,18 @@ ls *.uvprojx MDK-ARM/*.uvprojx run_autodebug.py 2>/dev/null
 |---|---|
 | 有 `.uvprojx`，**没有** `run_autodebug.py` | **免注入模式**（推荐）。直接用套件绝对路径调用，见下 |
 | 有 `.uvprojx`，**也有** `run_autodebug.py` | 套件已注入。用工程内的相对路径调用即可 |
-| 连 `.uvprojx` 都没有，芯片是 STM32F103C8(T6) | 下载模板工程，解压即用（命令见下）。其中标准库、CMSIS、崩溃追踪器都已就位 |
+| 连 `.uvprojx` 都没有，芯片是 STM32F103C8(T6) | 下载模板工程，解压即用（命令见下）。默认用 **HAL 版**；用户明确说用标准库时才用标准库版。库、CMSIS、崩溃追踪器都已就位 |
 | 连 `.uvprojx` 都没有，其他芯片 | **本套件不生成工程**。告诉用户先拿到一个能编译的 Keil 工程（CubeMX 导出 / 开发板例程 / 教程配套工程均可），再回来接入 |
 
 ```bash
-curl.exe -L -o template.zip https://github.com/TaoCosmo-Dev/STM32_AutoDebug_Universal_Kit/releases/download/template-f103c8-v1.0/STM32F103C8_StdPeriph_Template.zip
-tar -xf template.zip     # 得到 STM32F103C8_StdPeriph_Template/，工程在其 MDK-ARM/Template.uvprojx
+# HAL 版（默认）：得到 STM32F103C8_HAL_Template/，工程在其 MDK-ARM/Template.uvprojx
+curl.exe -L -o template.zip https://github.com/TaoCosmo-Dev/STM32_AutoDebug_Universal_Kit/releases/download/template-f103c8-hal-v1.0/STM32F103C8_HAL_Template.zip
+# 标准库版：把上面的地址换成
+#   .../releases/download/template-f103c8-v1.0/STM32F103C8_StdPeriph_Template.zip
+tar -xf template.zip
 ```
+
+HAL 版的代码只能写在 `USER CODE BEGIN/END` 区块内，否则用户用 CubeMX 重新生成时会被覆盖。
 
 > 不要自己手写 `.uvprojx`。手写工程是首次接入最大的耗时来源，而且出错时不受退出码契约保护。
 

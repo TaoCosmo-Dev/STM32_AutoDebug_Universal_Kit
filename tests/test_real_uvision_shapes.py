@@ -180,6 +180,20 @@ class CompilerRecordSync(UVisionProjectCase):
             text = f.read()
         self.assertLess(text.index("<pCCUsed>"), text.index("<uAC6>"))
 
+    def test_cubemx_project_without_uac6_gets_the_record(self):
+        """STM32CubeMX writes neither tag. Without a second anchor the sync silently did
+        nothing, and every build of a generated HAL project stayed a full rebuild."""
+        with open(self.path, encoding="utf-8") as f:
+            text = f.read().replace("      <uAC6>0</uAC6>\n", "", 1)
+        with open(self.path, "w", encoding="utf-8") as f:
+            f.write(text)
+        self.assertIsNotNone(self.builder.sync_compiler_record(self.path, self.LOG_AC5))
+        self.assertEqual(self.pcc().text, self.RECORD)
+        with open(self.path, encoding="utf-8") as f:
+            text = f.read()
+        self.assertLess(text.index("</ToolsetName>"), text.index("<pCCUsed>"))
+        self.assertNotIn("<uAC6>", text, "the compiler choice itself must stay untouched")
+
     def test_other_version_is_replaced(self):
         with open(self.path, encoding="utf-8") as f:
             text = f.read().replace(
