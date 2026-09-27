@@ -315,6 +315,7 @@ build:
   kill_uv4_on_timeout: true   # 弹模态框卡死时杀掉 UV4，避免锁死工程
   fail_on_stale_axf: true     # 本次没生成新镜像就判失败
   auto_fix_debug_info: true   # 编译前自动在 .uvprojx 里置 <DebugInformation>1（备份为 *.autodebug.bak）
+  auto_sync_compiler: true    # 编译后把本机实际使用的编译器写回 <pCCUsed>；缺失或不符时 UV4 -b 每次都全量重编
   log_encodings: ["utf-8", "gbk", "cp936", "latin-1"]
 
 serial:

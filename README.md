@@ -2,10 +2,10 @@
 
 **面向 AI 代理的 STM32 闭环开发工具链**：编译、烧录、实机验证、崩溃归因，全部以命令行驱动，结果以退出码交付。
 
-[![GitHub Release](https://img.shields.io/badge/Release-v2.4.0-blue?style=flat-square&logo=github)](https://github.com/TaoCosmo-Dev/STM32_AutoDebug_Universal_Kit/releases)
+[![GitHub Release](https://img.shields.io/badge/Release-v2.4.1-blue?style=flat-square&logo=github)](https://github.com/TaoCosmo-Dev/STM32_AutoDebug_Universal_Kit/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg?style=flat-square)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-STM32%20%7C%20Cortex--M-orange?style=flat-square)]()
-[![Tests](https://img.shields.io/badge/离线自测-114%20项通过-brightgreen?style=flat-square)]()
+[![Tests](https://img.shields.io/badge/离线自测-128%20项通过-brightgreen?style=flat-square)]()
 [![MCP](https://img.shields.io/badge/MCP-stdio%20server-purple?style=flat-square)]()
 
 ---
@@ -19,6 +19,7 @@
 - [环境要求](#环境要求)
 - [安装](#安装)
 - [接入工程](#接入工程)
+- [模板工程](#模板工程)
 - [仓库文件说明](#仓库文件说明)
 - [退出码契约](#退出码契约)
 - [固件侧前提](#固件侧前提)
@@ -248,7 +249,7 @@ Cortex-M 内核在进入异常时由硬件自动将现场压栈，其中程序�
 | **Python ≥ 3.10** | 安装时勾选 `Add python.exe to PATH` |
 | **调试器** | ST-Link / DAP-Link / CMSIS-DAP，SWD 四线：SWDIO、SWCLK、GND、3V3 |
 | **目标板** | 任意 STM32（F0/F1/F3/F4/F7/G0/G4/H7/L4/C0 等），型号自 `.uvprojx` 读取 |
-| **可编译的 Keil 工程** | 本工具链不生成工程 |
+| **可编译的 Keil 工程** | 本工具链不生成工程。STM32F103C8 可直接使用[模板工程](#模板工程) |
 | USB-UART | CH340 / CP210x / ST-Link VCP 均可，多数开发板已板载。非强制但强烈建议 |
 
 ### 由安装脚本自动完成
@@ -336,6 +337,31 @@ cd STM32_AutoDebug_Universal_Kit
 
 ---
 
+## 模板工程
+
+手头没有现成工程时，可以下载 STM32F103C8T6 + 标准外设库的模板，解压后直接进入闭环。
+
+**[下载 STM32F103C8_StdPeriph_Template.zip](https://github.com/TaoCosmo-Dev/STM32_AutoDebug_Universal_Kit/releases/download/template-f103c8-v1.0/STM32F103C8_StdPeriph_Template.zip)**（约 300 KB）
+
+| 项 | 内容 |
+|---|---|
+| 芯片 | STM32F103C8T6（Blue Pill / 最小系统板），8 MHz HSE 倍频至 72 MHz |
+| 库 | 标准外设库 V3.6.2 与 CMSIS Core，全部随工程提供，不依赖 RTE 组件或外部 pack |
+| 已接入 | 崩溃追踪器（USART1）、通过令牌、`printf` 重定向；`--check-firmware` 直接通过 |
+| 编译验证 | AC5 5.06u5：0 Error / 0 Warning；AC6 6.7：0 Error |
+| 接线 | SWD 四线；PA9 / PA10 接 USB-TTL；PC13 为板载 LED |
+
+也可以让代理自行下载（Windows 10 及以上自带 `curl.exe` 与 `tar`）：
+
+```bash
+curl.exe -L -o template.zip https://github.com/TaoCosmo-Dev/STM32_AutoDebug_Universal_Kit/releases/download/template-f103c8-v1.0/STM32F103C8_StdPeriph_Template.zip
+tar -xf template.zip
+```
+
+模板以 Release 附件的形式发布，没有放进仓库代码。原因是其中的 ST 标准库使用 SLA0044 许可证，不能并入本仓库的 MIT 许可范围。压缩包内附各部分的许可证原文。
+
+---
+
 ## 仓库文件说明
 
 日常使用涉及的文件仅 `setup_env.bat` 与 `AGENTS.md` 两个，其余由代理调用或供查阅。
@@ -367,7 +393,7 @@ cd STM32_AutoDebug_Universal_Kit
 | `mcu_support/` | `cm_backtrace_lite.c/.h`，运行于目标芯片的崩溃追踪器。安装追踪器时复制至工程并编译进固件 |
 | `templates/` | 硬件参数确认清单与接线指南模板，供代理在需求对齐阶段参考 |
 | `docs/ADVANCED.md` | 闭环时序、完整配置项、MCP 接入、架构说明 |
-| `tests/` | 114 项离线自测，无需硬件：`python -m unittest discover -s tests` |
+| `tests/` | 128 项离线自测，无需硬件：`python -m unittest discover -s tests` |
 
 ### 代理调用的常用命令
 
@@ -458,6 +484,7 @@ python run_autodebug.py --project MDK-ARM/App.uvprojx --install-tracer --uart US
 | 退出码 4，串口无数据 | 串口重定向未实现、波特率不匹配、COM 口被占用 | 前两项由代理修复（`--check-firmware` 会明确指出）；关闭占用串口的调试助手 |
 | 退出码 4，有输出但无令牌 | 测试未到达输出点 | 先查看未满足的固件契约，再参考 CPU 存活遥测：PC 值不变表示停留在死等循环 |
 | 崩溃但无源码行 | 工程未输出调试信息 | 每次编译前自动启用；仅在手动关闭 `auto_fix_debug_info` 时需处理 |
+| 未改动源码，每次编译仍重编全部文件 | 工程记录的编译器版本（`<pCCUsed>`）与本机不符或缺失。IDE 会自动更正并保存，`UV4 -b` 只在内存中更正、不保存，于是每次都全量重编 | v2.4.1 起首次编译后自动写回本机实际使用的版本（`auto_sync_compiler`）；HAL 工程每轮可节省数十秒 |
 | 报告记录"故障地址无效" | imprecise 总线错误（写缓冲延迟所致） | 在可疑的写操作后插入 `__DSB()` 以缩小范围 |
 | 连续多轮相同错误 | 上一次修改未生效 | 报告中 `repeated_failure` 为 true，应更换排查方向 |
 
@@ -481,7 +508,7 @@ python run_autodebug.py --project MDK-ARM/App.uvprojx --install-tracer --uart US
 ## 验证
 
 ```bash
-python -m unittest discover -s tests     # 114 项离线自测，无需硬件
+python -m unittest discover -s tests     # 128 项离线自测，无需硬件
 ```
 
 每次 push 与 Pull Request 由 GitHub Actions 在 Windows + Python 3.10 / 3.12 环境下自动执行，并校验版本号三处一致性与测试数量徽章。

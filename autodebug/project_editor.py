@@ -262,7 +262,15 @@ class KeilProjectEditor:
             return self
 
         def edit(block: str, name: str):
-            m = _INCLUDE_PATH.search(block)
+            # Search inside the C compiler's controls only. Every uVision project also
+            # carries <TargetCommonOption><IncludePath> (Folder Setup, never passed to
+            # armcc) ahead of it, and a bare search lands there: the edit "succeeds" and
+            # the compiler still cannot find the header.
+            vc = _VARIOUS_CONTROLS.search(block)
+            if not vc:
+                return block, None
+            body = vc.group(2)
+            m = _INCLUDE_PATH.search(body)
             if m:
                 current = m.group(1)
                 existing = {_norm(x) for x in current.split(";") if x.strip()}
@@ -270,13 +278,11 @@ class KeilProjectEditor:
                 if not todo:
                     return block, None
                 joined = ";".join([p for p in current.split(";") if p.strip()] + todo)
-                new_block = block[:m.start(1)] + joined + block[m.end(1):]
-                return new_block, f"已加入包含路径 [{name}]: {', '.join(todo)}"
+                body = body[:m.start(1)] + joined + body[m.end(1):]
+                return (block[:vc.start(2)] + body + block[vc.end(2):],
+                        f"已加入包含路径 [{name}]: {', '.join(todo)}")
 
-            vc = _VARIOUS_CONTROLS.search(block)
-            if not vc:
-                return block, None
-            indent = _detect_indent(vc.group(2), "Define", "\n            ")
+            indent = _detect_indent(body, "Define", "\n            ")
             tag = f"{indent}<IncludePath>{';'.join(wanted)}</IncludePath>"
             insert_at = vc.end(2)
             return (block[:insert_at] + tag + block[insert_at:],
@@ -293,7 +299,12 @@ class KeilProjectEditor:
             return self
 
         def edit(block: str, name: str):
-            m = _DEFINE.search(block)
+            # Same scoping as include paths: <Aads> has a <Define> of its own.
+            vc = _VARIOUS_CONTROLS.search(block)
+            if not vc:
+                return block, None
+            body = vc.group(2)
+            m = _DEFINE.search(body)
             if not m:
                 return block, None
             current = m.group(1)
@@ -303,7 +314,8 @@ class KeilProjectEditor:
             if not todo:
                 return block, None
             joined = ",".join([d for d in current.split(",") if d.strip()] + todo)
-            return (block[:m.start(1)] + joined + block[m.end(1):],
+            body = body[:m.start(1)] + joined + body[m.end(1):]
+            return (block[:vc.start(2)] + body + block[vc.end(2):],
                     f"已加入宏定义 [{name}]: {', '.join(todo)}")
 
         self._rewrite_targets(target_name, edit)

@@ -158,6 +158,8 @@ class BuildConfig:
     fail_on_stale_axf: bool = True       # never flash an image this build did not produce
     auto_fix_debug_info: bool = True     # tick "Output -> Debug Information" in the .uvprojx
                                          # for us, so nobody has to open the Keil IDE to do it
+    auto_sync_compiler: bool = True      # record the compiler UV4 actually used in <pCCUsed>;
+                                         # a mismatch makes every -b build a full rebuild
 
 
 @dataclass

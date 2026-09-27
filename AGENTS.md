@@ -80,6 +80,19 @@ python run_autodebug.py --project "MDK-ARM/YourProject.uvprojx"
 用户只负责提需求、回答硬件参数、插杜邦线。**凡是能用命令完成的，都必须你自己做**，
 严禁把「去 Keil 里勾一下 / 把文件加进工程」这类话丢给用户。
 
+### 3.0 还没有工程时
+
+本套件不生成工程，也**不要自己手写 `.uvprojx`**，那是首次接入最大的耗时来源。
+
+- 芯片是 STM32F103C8(T6)：下载模板工程，解压即用。标准库、CMSIS、崩溃追踪器、通过令牌都已就位：
+
+  ```bash
+  curl.exe -L -o template.zip https://github.com/TaoCosmo-Dev/STM32_AutoDebug_Universal_Kit/releases/download/template-f103c8-v1.0/STM32F103C8_StdPeriph_Template.zip
+  tar -xf template.zip
+  ```
+
+- 其他芯片：请用户提供一个能编译的 Keil 工程（CubeMX 导出 / 开发板例程均可）。
+
 ### 3.1 新建源文件后必须注册到工程
 
 你写的 `.c` 在加入 `.uvprojx` 之前对链接器不存在，必然报 `L6218E: Undefined symbol`：

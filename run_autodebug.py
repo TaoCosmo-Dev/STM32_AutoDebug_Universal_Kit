@@ -108,6 +108,7 @@ def main() -> int:
     if args.list_devices:
         return cmd_list_devices()
 
+    proj_path = args.project
     if not proj_path:
         candidates = find_uvprojx(os.getcwd())
         if not candidates:

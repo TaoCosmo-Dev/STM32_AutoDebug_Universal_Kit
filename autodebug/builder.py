@@ -222,6 +222,82 @@ class KeilBuilder:
                 f" —— 否则崩溃时无法定位到源码行。原工程已备份为 "
                 f"{os.path.basename(backup)}")
 
+    # uVision records the compiler a target was last built with in <pCCUsed>, e.g.
+    #   5060528::V5.06 update 5 (build 528)::ARMCC
+    # When that does not match the compiler actually installed -- a project copied from
+    # another machine, one written by hand, one with the tag missing -- the IDE would
+    # silently update it and save. `UV4 -b` updates it in memory, never saves, and
+    # rebuilds every file on every run. Measured on the F103 template: 29 files per
+    # build with the tag absent or off by one update, 0 once it matches.
+    _USING_COMPILER = re.compile(r"\*\*\* Using Compiler '([^']+)', folder: '([^']+)'")
+    _PCC_USED = re.compile(r"<pCCUsed>(.*?)</pCCUsed>")
+    _PCC_ANCHOR = re.compile(r"(\s*)<uAC6>")
+
+    def _compiler_record(self, log_content: str) -> Optional[str]:
+        """The <pCCUsed> value uVision itself would write for this build, or None."""
+        m = self._USING_COMPILER.search(log_content or "")
+        if not m or not self.uv4_path:
+            return None
+        version, folder = m.group(1), m.group(2)
+        v = re.match(r"V(\d+)\.(\d+)(?: update \d+)?(?: \(build (\d+)\))?$", version)
+        if not v:
+            return None          # an unfamiliar spelling: better untouched than wrong
+        number = f"{int(v.group(1))}{int(v.group(2)):02d}{int(v.group(3) or 0):04d}"
+        arm_dir = os.path.join(os.path.dirname(os.path.dirname(self.uv4_path)), "ARM")
+        tool_dir = re.sub(r"[\\/]bin[\\/]?$", "", folder, flags=re.IGNORECASE)
+        try:
+            rel = os.path.relpath(tool_dir, arm_dir)
+        except ValueError:
+            return None
+        if rel.startswith(".."):
+            return None          # registered outside the ARM tree: spelling unknown
+        return f"{number}::{version}::{rel}"
+
+    def sync_compiler_record(self, uvprojx_path: str, log_content: str,
+                             target_name: Optional[str] = None) -> Optional[str]:
+        """Write the compiler this build used into <pCCUsed>, when it is missing or names
+        another version. A record naming the same version is left alone even if its
+        folder is spelled differently: that spelling may be right for its own machine."""
+        record = self._compiler_record(log_content)
+        if not record:
+            return None
+        text = self._read_project_text(uvprojx_path)
+        if text is None:
+            return None
+        version = record.split("::")[1]
+
+        out, cursor, fixed = [], 0, []
+        for start, end, block, name in iter_named_targets(text, target_name):
+            m = self._PCC_USED.search(block)
+            if m and m.group(1).split("::")[1:2] == [version]:
+                continue
+            if m:
+                new_block = block[:m.start(1)] + record + block[m.end(1):]
+            else:
+                anchor = self._PCC_ANCHOR.search(block)
+                if not anchor:
+                    continue
+                new_block = (block[:anchor.start()] + f"{anchor.group(1)}<pCCUsed>{record}"
+                             f"</pCCUsed>" + block[anchor.start():])
+            out += [text[cursor:start], new_block]
+            cursor = end
+            fixed.append(name or "(unnamed target)")
+        if not fixed:
+            return None
+        out.append(text[cursor:])
+
+        backup = uvprojx_path + ".autodebug.bak"
+        try:
+            if not os.path.exists(backup):
+                with open(backup, "wb") as f:
+                    f.write(text.encode("utf-8"))
+            with open(uvprojx_path, "wb") as f:
+                f.write("".join(out).encode("utf-8"))
+        except Exception:
+            return None
+        return (f"已把工程记录的编译器同步为本机的 {version}（{', '.join(fixed)}）"
+                f" —— 对不上时 Keil 每次都会全量重编")
+
     # ---------------------------------------------------------------- build
 
     def _read_log(self, log_file: str) -> str:
@@ -337,6 +413,11 @@ class KeilBuilder:
         errors, warnings = self._parse_log_messages(log_content, proj_dir)
         duration = time.time() - start_time
 
+        if self.cfg.auto_sync_compiler:
+            note = self.sync_compiler_record(uvprojx_path, log_content, target_name)
+            if note:
+                print(f"[builder] {note}", file=sys.stderr)
+
         # Re-resolve outputs: OutputName can change between targets.
         axf_path, hex_path = self.get_output_paths(uvprojx_path, target_name)
 
@@ -381,6 +462,9 @@ class KeilBuilder:
 
     # ARMCC / AC5:   "main.c", line 42: Error:  #20: identifier "x" is undefined
     _ARMCC = re.compile(r'"([^"]+)",\s*line\s*(\d+):\s*(Error|Warning|error|warning):?\s*#?([A-Za-z0-9_\-]+)?:?\s*(.+)')
+    # ARMCC / AC5 as uVision logs it -- the form every real build_log actually contains:
+    #   ..\User\main.c(17): error:  #5: cannot open source input file "x.h": No such file
+    _ARMCC_UV = re.compile(r'^(.+?)\((\d+)\):\s*(error|warning|Error|Warning):\s*#?([A-Za-z0-9_\-]+)?:?\s*(.+)$')
     # ARMCLANG / AC6: ..\main.c:42:10: error: use of undeclared identifier 'x'
     _ARMCLANG = re.compile(r'^(.+?):(\d+):(\d+):\s*(error|warning|fatal error):\s*(.+)$')
     # Linker: .\Objects\app.axf: Error: L6218E: Undefined symbol foo (referred from main.o).
@@ -412,7 +496,7 @@ class KeilBuilder:
             if not line:
                 continue
 
-            m = self._ARMCC.search(line)
+            m = self._ARMCC.search(line) or self._ARMCC_UV.match(line)
             if m:
                 fpath, lnum, sev, code, msg = m.groups()
                 add(CompilerMessage(abspath(fpath), int(lnum), None,

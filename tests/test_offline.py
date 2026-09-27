@@ -30,13 +30,15 @@ class TestBuildLogParsing(unittest.TestCase):
         return self.builder._parse_log_messages(log, r"C:\proj")
 
     def test_armcc_error(self):
+        """Both AC5 spellings count. The first is what uVision writes to build logs; this
+        test used to assert it was dropped, which hid every real AC5 compile error."""
         log = '..\\User\\main.c(12): error:  #20: identifier "gpio" is undefined\n' \
               '"..\\User\\main.c", line 42: Error:  #20: identifier "foo" is undefined'
         errors, warnings = self.parse(log)
-        self.assertEqual(len(errors), 1)
-        self.assertEqual(errors[0].line_number, 42)
-        self.assertEqual(errors[0].error_code, "20")
-        self.assertIn("foo", errors[0].message)
+        self.assertEqual([e.line_number for e in errors], [12, 42])
+        self.assertEqual({e.error_code for e in errors}, {"20"})
+        self.assertIn("gpio", errors[0].message)
+        self.assertIn("foo", errors[1].message)
         self.assertEqual(warnings, [])
 
     def test_armcc_warning_is_not_an_error(self):
