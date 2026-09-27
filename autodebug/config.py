@@ -187,6 +187,9 @@ class TestConfig:
     ])
     crash_begin_marker: str = "[AUTODEBUG_CRASH_START]"
     crash_end_marker: str = "[AUTODEBUG_CRASH_END]"
+    precheck_firmware: bool = True       # scan the source before flashing; when no pass
+    no_token_wait_seconds: float = 3.0   # token exists, wait this long instead of the full
+                                         # serial timeout -- only crashes can arrive anyway
 
 
 @dataclass

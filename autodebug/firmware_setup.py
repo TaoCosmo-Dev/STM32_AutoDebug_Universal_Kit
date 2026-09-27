@@ -13,7 +13,7 @@ import io
 import os
 import re
 import shutil
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from .project_editor import (
     DEFAULT_GROUP, KeilProjectEditor, EditResult, disable_conflicting_fault_handlers,
@@ -218,6 +218,15 @@ def check_firmware_contract(project_root: str,
     Returns a list of human-readable problems; empty means the project is fully wired
     for autonomous diagnosis. Used by the loop to tell the AI what it still owes.
     """
+    return firmware_precheck(project_root, pass_keywords)[0]
+
+
+def firmware_precheck(project_root: str,
+                      pass_keywords: Optional[List[str]] = None) -> Tuple[List[str], bool]:
+    """(problems, pass token found in the application source), from one scan.
+
+    The second value lets the loop stop waiting for a line the firmware cannot print.
+    """
     pass_keywords = pass_keywords or ["[ALL TESTS PASSED]", "TESTS_PASSED", "[PASS]"]
     problems: List[str] = []
 
@@ -243,7 +252,8 @@ def check_firmware_contract(project_root: str,
     # the tracer's own header would otherwise mask the fact that nobody ever calls it.
     blob = app_blob
 
-    if not any(kw in blob for kw in pass_keywords):
+    token_found = any(kw in blob for kw in pass_keywords)
+    if not token_found:
         problems.append(
             f"没有任何源文件打印通过令牌 {pass_keywords[0]}，"
             f"闭环无法判定成功——请在测试通过路径上打印它")
@@ -256,7 +266,7 @@ def check_firmware_contract(project_root: str,
             "（跑 --install-tracer --uart <USARTx> --family <系列> 可自动生成）")
 
     problems.extend(check_ac5_source_encoding(project_root))
-    return problems
+    return problems, token_found
 
 
 # armcc decodes source with the machine's ANSI code page, so a UTF-8 Chinese string

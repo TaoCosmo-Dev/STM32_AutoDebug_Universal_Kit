@@ -211,6 +211,12 @@ class AutoDebugEngine:
 
     # ------------------------------------------------------------------ one pass
 
+    @staticmethod
+    def _source_root(proj_dir: str) -> str:
+        """MDK-ARM/App.uvprojx keeps its sources one level up; a root-level one beside it."""
+        return (os.path.dirname(proj_dir) if os.path.basename(proj_dir).upper().startswith("MDK")
+                else proj_dir)
+
     def run_once(self, uvprojx_path: str, target_name: Optional[str] = None,
                  iteration: int = 1) -> DiagnosticReport:
         """Build, flash, run and diagnose exactly once. Never raises for expected failures."""
@@ -235,6 +241,25 @@ class AutoDebugEngine:
         if resolver and not resolver.loaded:
             self._log("[!] 固件里没有调试信息，无法把崩溃地址映射到源码行"
                        "（Keil: Options -> Output -> 勾选 Debug Information）。")
+
+        # Checked before flashing rather than after a timeout: with no pass token in the
+        # source the full serial wait cannot succeed, so only a short window for a crash
+        # dump is worth spending. Nothing is blocked -- flash, capture and SWD all run.
+        firmware_problems: List[str] = []
+        serial_wait = self.config.serial.timeout_seconds
+        if self.config.test.precheck_firmware:
+            try:
+                from .firmware_setup import firmware_precheck
+                firmware_problems, token_found = firmware_precheck(
+                    self._source_root(proj_dir), self.config.test.pass_keywords)
+            except Exception:
+                token_found = True
+            for problem in firmware_problems:
+                self._log(f"[!] [固件契约] {problem}")
+            if not token_found:
+                serial_wait = min(serial_wait, self.config.test.no_token_wait_seconds)
+                self._log(f"[!] 源码里找不到通过令牌，本轮串口只等 {serial_wait:.0f}s 用于抓崩溃"
+                          f"（令牌若在工程目录外，设 test.precheck_firmware: false）")
 
         # ---- Phase 2: flash, core held halted ---------------------------------------
         self._log(f"\n>>> [第 {iteration} 轮] 步骤 2/4  正在烧录到板子（烧完先让 CPU 停住不跑）...")
@@ -288,6 +313,7 @@ class AutoDebugEngine:
             fail_keywords=self.config.test.fail_keywords,
             crash_begin=self.config.test.crash_begin_marker,
             crash_end=self.config.test.crash_end_marker,
+            timeout_seconds=serial_wait,
             on_line_cb=lambda line: self._log(f"  [MCU] {line}"),
         )
         self.serial_mon.close()
@@ -335,23 +361,21 @@ class AutoDebugEngine:
 
         # 4d. No fault, no token: report honestly, with CPU liveness telemetry.
         cpu_running = self.probe.is_target_running()
-        self._log(f"[-] 等了 {self.config.serial.timeout_seconds:.0f}s 没等到通过信号"
+        self._log(f"[-] 等了 {serial_wait:.0f}s 没等到通过信号"
                   f"（CPU 是否在跑：{ {True: '是', False: '否', None: '未知'}[cpu_running] }）。")
-        firmware_problems = []
-        try:
-            from .firmware_setup import check_firmware_contract
-            firmware_problems = check_firmware_contract(
-                os.path.dirname(proj_dir) if os.path.basename(proj_dir).upper().startswith("MDK")
-                else proj_dir,
-                self.config.test.pass_keywords)
-        except Exception:
-            pass
-        for problem in firmware_problems:
-            self._log(f"    [固件契约] {problem}")
+        if not self.config.test.precheck_firmware:
+            try:
+                from .firmware_setup import check_firmware_contract
+                firmware_problems = check_firmware_contract(
+                    self._source_root(proj_dir), self.config.test.pass_keywords)
+            except Exception:
+                pass
+            for problem in firmware_problems:
+                self._log(f"    [固件契约] {problem}")
 
         return DiagnosticReporter.create_from_timeout(
             iteration, uvprojx_path, test_res.raw_output,
-            self.config.serial.timeout_seconds, test_res.port, cpu_running,
+            serial_wait, test_res.port, cpu_running,
             self.config.test.pass_keywords,
             serial_ok=test_res.opened, open_error=test_res.open_error,
             firmware_problems=firmware_problems)

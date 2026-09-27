@@ -2,10 +2,10 @@
 
 **面向 AI 代理的 STM32 闭环开发工具链**：编译、烧录、实机验证、崩溃归因，全部以命令行驱动，结果以退出码交付。
 
-[![GitHub Release](https://img.shields.io/badge/Release-v2.4.1-blue?style=flat-square&logo=github)](https://github.com/TaoCosmo-Dev/STM32_AutoDebug_Universal_Kit/releases)
+[![GitHub Release](https://img.shields.io/badge/Release-v2.4.2-blue?style=flat-square&logo=github)](https://github.com/TaoCosmo-Dev/STM32_AutoDebug_Universal_Kit/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg?style=flat-square)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-STM32%20%7C%20Cortex--M-orange?style=flat-square)]()
-[![Tests](https://img.shields.io/badge/离线自测-128%20项通过-brightgreen?style=flat-square)]()
+[![Tests](https://img.shields.io/badge/离线自测-132%20项通过-brightgreen?style=flat-square)]()
 [![MCP](https://img.shields.io/badge/MCP-stdio%20server-purple?style=flat-square)]()
 
 ---
@@ -217,7 +217,7 @@ Cortex-M 内核在进入异常时由硬件自动将现场压栈，其中程序�
 
 | 限制 | 说明 |
 |---|---|
-| 不生成新工程 | v2.3.0 起移除。请先通过 STM32CubeMX 导出、开发板附带例程或教程配套工程获得一个可编译的 Keil 工程 |
+| 不生成新工程 | v2.3.0 起移除。请先通过 STM32CubeMX 导出、开发板附带例程或教程配套工程获得一个可编译的 Keil 工程；STM32F103C8 可直接使用[模板工程](#模板工程) |
 | 仅支持 Windows | 核心依赖 Keil MDK |
 | 仅支持 Keil 工具链 | 不支持 IAR、CMake/GCC、PlatformIO |
 | 调试器为必需项 | ST-Link / DAP-Link / CMSIS-DAP 缺一不可，否则无法烧录，亦无法读取崩溃现场 |
@@ -393,7 +393,7 @@ tar -xf template.zip
 | `mcu_support/` | `cm_backtrace_lite.c/.h`，运行于目标芯片的崩溃追踪器。安装追踪器时复制至工程并编译进固件 |
 | `templates/` | 硬件参数确认清单与接线指南模板，供代理在需求对齐阶段参考 |
 | `docs/ADVANCED.md` | 闭环时序、完整配置项、MCP 接入、架构说明 |
-| `tests/` | 128 项离线自测，无需硬件：`python -m unittest discover -s tests` |
+| `tests/` | 132 项离线自测，无需硬件：`python -m unittest discover -s tests` |
 
 ### 代理调用的常用命令
 
@@ -482,6 +482,7 @@ python run_autodebug.py --project MDK-ARM/App.uvprojx --install-tracer --uart US
 | 编译报 `#8: missing closing quote` 但引号无误 | 源码含 UTF-8 中文字面量，AC5 按 GBK 解析 | 中文只放注释；`--check-firmware` 会点名文件与行号 |
 | 退出码 2，无法连接目标 | 固件将 SWD 引脚复用为普通 IO，或芯片处于读保护状态 | 保持 `connect_mode: under-reset`；RDP Level 1 需整片擦除解锁 |
 | 退出码 4，串口无数据 | 串口重定向未实现、波特率不匹配、COM 口被占用 | 前两项由代理修复（`--check-firmware` 会明确指出）；关闭占用串口的调试助手 |
+| 退出码 4，报告称只等了 3 秒 | 源码中找不到通过令牌，完整等待不可能成功，串口只保留抓崩溃的时间窗 | 在测试通过路径上打印令牌。令牌若位于工程目录之外，设 `test.precheck_firmware: false` |
 | 退出码 4，有输出但无令牌 | 测试未到达输出点 | 先查看未满足的固件契约，再参考 CPU 存活遥测：PC 值不变表示停留在死等循环 |
 | 崩溃但无源码行 | 工程未输出调试信息 | 每次编译前自动启用；仅在手动关闭 `auto_fix_debug_info` 时需处理 |
 | 未改动源码，每次编译仍重编全部文件 | 工程记录的编译器版本（`<pCCUsed>`）与本机不符或缺失。IDE 会自动更正并保存，`UV4 -b` 只在内存中更正、不保存，于是每次都全量重编 | v2.4.1 起首次编译后自动写回本机实际使用的版本（`auto_sync_compiler`）；HAL 工程每轮可节省数十秒 |
@@ -508,7 +509,7 @@ python run_autodebug.py --project MDK-ARM/App.uvprojx --install-tracer --uart US
 ## 验证
 
 ```bash
-python -m unittest discover -s tests     # 128 项离线自测，无需硬件
+python -m unittest discover -s tests     # 132 项离线自测，无需硬件
 ```
 
 每次 push 与 Pull Request 由 GitHub Actions 在 Windows + Python 3.10 / 3.12 环境下自动执行，并校验版本号三处一致性与测试数量徽章。

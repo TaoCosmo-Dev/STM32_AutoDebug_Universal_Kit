@@ -331,6 +331,8 @@ test:
   fail_keywords: ["[TEST FAILED]", "ASSERTION_FAILED", "[AUTODEBUG_CRASH_START]"]
   crash_begin_marker: "[AUTODEBUG_CRASH_START]"
   crash_end_marker: "[AUTODEBUG_CRASH_END]"
+  precheck_firmware: true     # 烧录前扫描源码检查固件契约；源码里没有通过令牌时缩短串口等待
+  no_token_wait_seconds: 3    # 上述情况下只等这么久（仅用于抓崩溃）。令牌在工程目录外时请关闭上一项
 
 loop:
   git_snapshot: true

@@ -42,6 +42,8 @@ test:
     - "[AUTODEBUG_CRASH_START]"
   crash_begin_marker: "[AUTODEBUG_CRASH_START]"
   crash_end_marker: "[AUTODEBUG_CRASH_END]"
+  precheck_firmware: true     # 烧录前扫描源码；源码里没有通过令牌时，串口只等下面这么久
+  no_token_wait_seconds: 3    # （完整等待不可能成功，只剩抓崩溃的意义）。令牌若在工程目录外，请关掉上一项
 
 loop:
   git_snapshot: true      # commit a restore point before each AI patch
