@@ -381,7 +381,7 @@ UART 崩溃块解析、断言三种格式、串口打分、配置回退。**这�
 
 ## Grill-Me 硬件访谈
 
-写任何代码前必须问清 5 大硬件分支（模板见 `templates/grill_me_hardware_checklist.md`）：
+下面这些参数猜错了编译照样通过，只有上板才暴露。代理只在缺少且影响正确性时才向用户确认，已知的不会重复问（完整清单见 `templates/grill_me_hardware_checklist.md`）：
 
 1. **⏱️ 时钟树与外部晶振 (HSE)**：8 / 12 / 25 MHz 的确切数值与 PLL 倍频系数（配错直接超频死机或延时倍速失效）；
 2. **🔌 开发板型号与引脚冲突**：目标 SPI / I2C / UART / PWM / ADC 引脚是否已被板载 SPI Flash、以太网 PHY、板载 LED 占用；
@@ -389,7 +389,7 @@ UART 崩溃块解析、断言三种格式、串口打分、配置回退。**这�
 4. **⚡ 通信时序与驱动模式**：硬件 DMA 双缓冲 vs 中断环形缓冲区 vs 阻塞轮询；
 5. **🏗️ 系统框架选型**：裸机前后台状态机 vs RTOS 多任务 vs 图形/协议栈。
 
-产出《技术方案 + 杜邦线引脚对照表 + 电气安全预警》（模板见 `templates/wiring_guide_template.md`）。
+需要给用户接线说明时，可参考 `templates/wiring_guide_template.md` 的格式。
 
 ---
 

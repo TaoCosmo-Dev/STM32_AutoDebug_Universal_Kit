@@ -2,7 +2,7 @@
 
 **面向 AI 代理的 STM32 闭环开发工具链**：编译、烧录、实机验证、崩溃归因，全部以命令行驱动，结果以退出码交付。
 
-[![GitHub Release](https://img.shields.io/badge/Release-v2.4.4-blue?style=flat-square&logo=github)](https://github.com/TaoCosmo-Dev/STM32_AutoDebug_Universal_Kit/releases)
+[![GitHub Release](https://img.shields.io/badge/Release-v2.4.5-blue?style=flat-square&logo=github)](https://github.com/TaoCosmo-Dev/STM32_AutoDebug_Universal_Kit/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg?style=flat-square)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-STM32%20%7C%20Cortex--M-orange?style=flat-square)]()
 [![Tests](https://img.shields.io/badge/离线自测-169%20项通过-brightgreen?style=flat-square)]()
@@ -307,7 +307,7 @@ cd STM32_AutoDebug_Universal_Kit
 我要实现：<用自然语言描述功能>
 ```
 
-代理将自动加载规范、确认硬件参数、输出接线表并执行闭环。
+代理将自动加载规范，缺少会影响正确性的硬件参数时先向你确认，然后编码并执行闭环。
 
 **工作机制**：`setup_env` 最后安装的 Skill 即为入口。`SKILL.md` 是开放标准，Claude Code、Cursor、Codex CLI、Gemini CLI、Cline、Windsurf、Copilot、Zed 等均可读取，一次安装覆盖全部工具链。
 
@@ -398,7 +398,7 @@ python -m zipfile -e template.zip .
 
 | 文件 | 作用 |
 |---|---|
-| **`AGENTS.md`** | **AI 开发规范，全项目唯一的规则文件。** 闭环流程、退出码契约、需求对齐清单、嵌入式开发准则均在其中。调整代理行为只需修改此文件 |
+| **`AGENTS.md`** | **给代理的使用说明，全项目唯一的规则文件。** 包含退出码契约、完成标准、工程命令与踩坑清单；只写工具用法与事实，不规定代理如何设计实现。调整代理行为只需修改此文件 |
 | `skills/stm32-autodebug/` | Skill 模板。`install_skill.py` 将其分发至各编辑器目录。内容为指向 `AGENTS.md` 的引用而非副本，规范始终保持单一来源 |
 | `mcu_support/` | `cm_backtrace_lite.c/.h`，运行于目标芯片的崩溃追踪器。安装追踪器时复制至工程并编译进固件 |
 | `templates/` | 硬件参数确认清单与接线指南模板，供代理在需求对齐阶段参考 |

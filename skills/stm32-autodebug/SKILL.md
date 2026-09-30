@@ -1,6 +1,6 @@
 ---
 name: stm32-autodebug
-description: STM32 / Cortex-M 固件的编译、烧录、上板验证与崩溃归因闭环。当任务涉及以下任一情况时使用：改动或新建 STM32 固件源码（main.c、驱动、HAL 代码）；Keil MDK 工程（.uvprojx）；要求编译、烧录、下载、上板跑、验证固件；板子出现 HardFault、跑飞、死机、复位、串口无输出、卡死；或工作目录下存在 run_autodebug.py / autodebug.config.yaml / autodebug/ 目录。也用于用户点名"自动调试套件""AutoDebug""闭环调试"时。仅适用于 STM32 / Cortex-M + Keil MDK（Windows），不适用于 ESP32、Arduino、树莓派等其它平台。
+description: 在 Keil MDK 工程上编译、烧录 STM32 固件并在实机上验证，或把 HardFault、死机、串口无输出定位到源码行。用于改完固件需要上板验证、板子运行异常需要定位、或要新建 STM32F103C8 工程时。仅限 STM32 / Cortex-M + Keil MDK（Windows）。
 ---
 
 # STM32 全自动调试套件
@@ -11,21 +11,20 @@ description: STM32 / Cortex-M 固件的编译、烧录、上板验证与崩溃�
 
 ---
 
-## 第一步（必做）：读规范
+## 详细说明在哪
 
-**本 skill 只是入口，不是规范本身。** 完整规范在 `AGENTS.md`，读它，按它执行：
+本文件只负责「怎么调用」。细节在 `AGENTS.md`：工程根目录有注入的那份就用它，否则用 `{{KIT_DIR}}/AGENTS.md`。按需查：
 
-| 情况 | 读哪个 AGENTS.md |
+| 需要什么 | 看哪里 |
 |---|---|
-| 当前工程根目录有 `AGENTS.md`（套件注入过）| **读工程里那份**，它优先 |
-| 没有（免注入模式，常态）| 读 `{{KIT_DIR}}/AGENTS.md` |
-
-> 规范只有 `AGENTS.md` 一份，这是本套件的刻意设计——同一份内容散成多份只会互相不同步。
-> 所以本文件不复述规则，只负责「什么时候该用」和「怎么调用」。
+| 退出码含义、诊断报告字段 | AGENTS.md §0、§1 |
+| 硬件参数缺失时问什么 | AGENTS.md §2 |
+| 加源文件 / 包含路径 / 宏、启用 HAL 外设、装崩溃追踪器、固件里要写的两件事 | AGENTS.md §3 |
+| AC5 中文字符串、测时间的方法等坑 | AGENTS.md §4 |
 
 ---
 
-## 第二步：判断工程状态
+## 判断工程状态
 
 ```bash
 ls *.uvprojx MDK-ARM/*.uvprojx run_autodebug.py 2>/dev/null
@@ -55,7 +54,7 @@ HAL 版的代码只能写在 `USER CODE BEGIN/END` 区块内，否则用户用 C
 
 ---
 
-## 第三步：调用
+## 调用
 
 **免注入模式**（工程里没有 `run_autodebug.py` 时）——用套件的绝对路径，`--project` 指向目标工程：
 
@@ -76,18 +75,11 @@ python run_autodebug.py --project "MDK-ARM/App.uvprojx"
 
 ---
 
-## 核心契约（细节一律以 AGENTS.md 为准）
+## 什么算完成
 
-三条最容易被违反的，先记住：
+退出码 0：编译通过、烧录成功、实机串口打印出通过令牌。闭环只作用于用户接好的这块开发板，可以直接反复运行、修复本次改动引起的失败后重跑，不用每步征求同意。
 
-1. **退出码是唯一真理。** 严禁凭日志文字判断成败。只有「编译 0 Error + 烧录成功 + 实机串口吐出通过令牌」三者同时成立才返回 0。退出码含义表在 `AGENTS.md` 第 0 节。
-2. **改完 STM32 源码不许直接收工**，必须跑完闭环再回话；不要自己拼编译/烧录命令绕过脚本（它内部「先 halt 再开串口后 resume」的顺序是有讲究的）。
-3. **谋定而后动。** 新项目 / 新外设先追问 5 类硬件参数（时钟树、引脚冲突、外设指标、驱动模式、系统框架），用户确认后才编码。清单在 `AGENTS.md` 第 2 节。
-
-拿到非 0 退出码：读 `.uvprojx` 所在目录的 `diagnostic_report.json`（CubeMX 工程就是 `MDK-ARM/` 下）的 `ai_repair_prompt` 与 `next_actions` → 只改与根因直接相关的文件 → 重跑。
-- `repeated_failure: true`：上次修改没生效，**换思路，别重复同类改动**。
-- `source_unchanged: true`：源码没改、失败却相同，**根因不在代码**——查接线、探针、串口链路、芯片支持包，别改代码。
-- 签名是 `TIMEOUT|no bytes`（串口一个字节都没收到）：先查物理链路，再怀疑固件。
+失败时读 `.uvprojx` 所在目录（CubeMX 工程是 `MDK-ARM/`）的 `diagnostic_report.json`，字段含义见 AGENTS.md §0–§1。
 
 ---
 
@@ -111,6 +103,6 @@ python "KIT/run_autodebug.py" --list-devices                             # 列�
 
 ## 补充资料（按需读，不用预加载）
 
-- `{{KIT_DIR}}/AGENTS.md` —— **权威规范**，第一步就该读
+- `{{KIT_DIR}}/AGENTS.md` —— 退出码、报告字段、工程命令、踩坑清单
 - `{{KIT_DIR}}/README.md` —— 总览、安装、排错对照表
 - `{{KIT_DIR}}/docs/ADVANCED.md` —— 闭环时序、完整配置项、MCP Server 接入、架构
