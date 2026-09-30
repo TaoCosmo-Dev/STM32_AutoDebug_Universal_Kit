@@ -479,6 +479,16 @@ class TimebaseCheck(unittest.TestCase):
 # --------------------------------------------------------------------------- setup + docs
 
 class DepsCheck(unittest.TestCase):
+    def test_messages_survive_a_legacy_code_page_console(self):
+        """The CI runner's console is cp1252: print() of Chinese text raised there."""
+        from autodebug import deps_check
+        raw = io.BytesIO()
+        stream = io.TextIOWrapper(raw, encoding="cp1252")
+        with mock.patch("sys.stdout", stream):
+            deps_check.say("      已清理 pip 残留：C:\\x\\~msis_pack_manager")
+            stream.flush()
+        self.assertIn(b"~msis_pack_manager", raw.getvalue())
+
     def test_pip_leftovers_are_cleared(self):
         from autodebug import deps_check
         tmp = tempfile.mkdtemp()

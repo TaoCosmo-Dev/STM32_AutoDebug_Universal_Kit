@@ -5,7 +5,7 @@
 [![GitHub Release](https://img.shields.io/badge/Release-v2.4.4-blue?style=flat-square&logo=github)](https://github.com/TaoCosmo-Dev/STM32_AutoDebug_Universal_Kit/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg?style=flat-square)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-STM32%20%7C%20Cortex--M-orange?style=flat-square)]()
-[![Tests](https://img.shields.io/badge/离线自测-168%20项通过-brightgreen?style=flat-square)]()
+[![Tests](https://img.shields.io/badge/离线自测-169%20项通过-brightgreen?style=flat-square)]()
 [![MCP](https://img.shields.io/badge/MCP-stdio%20server-purple?style=flat-square)]()
 
 ---
@@ -527,7 +527,7 @@ python run_autodebug.py --project MDK-ARM/App.uvprojx --install-tracer --uart US
 ## 验证
 
 ```bash
-python -m unittest discover -s tests     # 168 项离线自测，无需硬件
+python -m unittest discover -s tests     # 169 项离线自测，无需硬件
 ```
 
 每次 push 与 Pull Request 由 GitHub Actions 在 Windows + Python 3.10 / 3.12 环境下自动执行，并校验版本号三处一致性与测试数量徽章。

@@ -32,6 +32,17 @@ MIRROR = ["-i", "https://pypi.tuna.tsinghua.edu.cn/simple",
           "--trusted-host", "pypi.tuna.tsinghua.edu.cn"]
 
 
+def say(text: str) -> None:
+    """print() that cannot raise. A console on a legacy code page (cp1252, and cp936
+    for some characters) makes print() throw UnicodeEncodeError on Chinese text -- a
+    post-install check must never be the thing that crashes."""
+    try:
+        print(text)
+    except UnicodeEncodeError:
+        encoding = getattr(sys.stdout, "encoding", None) or "ascii"
+        print(text.encode(encoding, "replace").decode(encoding, "replace"))
+
+
 def site_dirs():
     dirs = []
     try:
@@ -58,7 +69,7 @@ def clear_leftovers():
             except OSError:
                 pass
     for path in removed:
-        print(f"      已清理 pip 残留：{path}")
+        say(f"      已清理 pip 残留：{path}")
     return removed
 
 
@@ -78,7 +89,7 @@ def main() -> int:
     bad = failing(REQUIRED)
     if bad:
         packages = [REQUIRED[name] for name, _ in bad]
-        print(f"      导入失败：{', '.join(n for n, _ in bad)}，正在强制重装 {', '.join(packages)} ...")
+        say(f"      导入失败：{', '.join(n for n, _ in bad)}，正在强制重装 {', '.join(packages)} ...")
         for extra in (MIRROR, []):
             cmd = [sys.executable, "-m", "pip", "install", "--force-reinstall", "--no-deps",
                    *extra, *packages]
@@ -88,16 +99,16 @@ def main() -> int:
         bad = failing(REQUIRED)
 
     for name, e in failing(OPTIONAL):
-        print(f"      [提示] 可选依赖 {name} 无法导入（{type(e).__name__}），只影响 J-Link 用户。")
+        say(f"      [提示] 可选依赖 {name} 无法导入（{type(e).__name__}），只影响 J-Link 用户。")
 
     if bad:
         for name, e in bad:
-            print(f"[错误] 无法导入 {name}：{type(e).__name__}: {e}")
-        print("       请关闭所有正在运行的 Python / AI 编辑器后，手动执行：")
-        print(f"       {sys.executable} -m pip install --force-reinstall "
-              f"{' '.join(REQUIRED[n] for n, _ in bad)}")
+            say(f"[错误] 无法导入 {name}：{type(e).__name__}: {e}")
+        say("       请关闭所有正在运行的 Python / AI 编辑器后，手动执行：")
+        say(f"       {sys.executable} -m pip install --force-reinstall "
+            f"{' '.join(REQUIRED[n] for n, _ in bad)}")
         return 1
-    print("      依赖导入检查通过。")
+    say("      依赖导入检查通过。")
     return 0
 
 
