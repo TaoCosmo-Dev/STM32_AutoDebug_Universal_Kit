@@ -135,6 +135,7 @@ class Preflight(unittest.TestCase):
 
     def test_unknown_target_is_reported_with_the_exact_command(self):
         cfg = AutoDebugConfig.load()
+        cfg.debugger.auto_install_pack = False     # never hit the network from a test
         problems = cfg.preflight(need_hardware=True, target="stm32zz999zz")
         hit = [p for p in problems if "pack install" in p]
         self.assertTrue(hit, "a target pyOCD cannot resolve must be caught before the run")

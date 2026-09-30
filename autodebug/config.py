@@ -7,8 +7,9 @@ unchanged on any PC.
 """
 from dataclasses import dataclass, field, fields as dataclass_fields
 import os
+import subprocess
 import sys
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Tuple
 import yaml
 
 try:
@@ -141,6 +142,11 @@ class DebuggerConfig:
     jlink_path: str = r"C:\Program Files\SEGGER\JLink\JLink.exe"
     jlink_gdb_server: str = r"C:\Program Files\SEGGER\JLink\JLinkGDBServerCL.exe"
     flash_address: int = 0x08000000      # J-Link raw flash base
+    auto_install_pack: bool = True       # a missing device pack is installed in preflight
+    pack_files: List[str] = field(default_factory=list)
+    # Offline alternative: local .pack files handed straight to pyOCD on every session.
+    # Registering a pack at runtime (populate_targets_from_pack) lasts one process only,
+    # so a path in the config is the only offline route that survives the next run.
 
     def resolve_probe_id(self) -> Optional[str]:
         """Resolved lazily: probes get plugged in after the config is loaded."""
@@ -204,6 +210,9 @@ class LoopConfig:
                                          # between two wrong fixes (A/B/A/B) resets the
                                          # counter every round and never trips the brake.
     halt_target_on_finish: bool = False  # leave the board running after a green run
+    timebase_check: bool = True          # after a pass, time the tick counters over SWD:
+    timebase_sample_seconds: float = 0.5 # a SysTick running 8x slow still prints its pass
+    timebase_tolerance: float = 0.05     # token, so the token alone cannot catch it
 
 
 @dataclass
@@ -300,12 +309,60 @@ class AutoDebugConfig:
 
         name = (target or self.debugger.target_override or "").strip().lower()
         if name:
-            known = self._pyocd_knows_target(name)
-            if known is False:
-                problems.append(
-                    f"pyOCD 不认识芯片 {name}，缺少对应的 CMSIS 器件包。请先运行：\n"
-                    f"    python -m pyocd pack install {name}")
+            problems.extend(self._pack_problems(name))
         return problems
+
+    def _pack_problems(self, name: str) -> List[str]:
+        """Make sure pyOCD can drive `name`, installing its device pack when allowed.
+
+        The kit's own rule is that anything a command can do, the tool does: printing
+        `pyocd pack install` for the user to paste was the one step it still handed off.
+        """
+        packs = [p for p in (self.debugger.pack_files or []) if p]
+        if packs:
+            missing = [p for p in packs if not os.path.exists(p)]
+            if missing:
+                return [f"debugger.pack_files 中的文件不存在：{', '.join(missing)}"]
+            return []   # handed to pyOCD directly; the managed-pack index cannot see them
+
+        known = self._pyocd_knows_target(name)
+        if known is not False:
+            return []
+
+        detail = ""
+        if self.debugger.auto_install_pack:
+            print(f"[preflight] 本机缺少 {name} 的芯片支持包，正在自动安装"
+                  f"（首次约 1-2 分钟，需要联网）...", file=sys.stderr, flush=True)
+            ok, detail = self._install_pack(name)
+            if ok and self._pyocd_knows_target(name) is not False:
+                print(f"[preflight] 芯片支持包已安装：{name}", file=sys.stderr, flush=True)
+                return []
+            detail = detail or "：安装命令结束了，但 pyOCD 仍然不认识这颗芯片"
+
+        head = (f"pyOCD 不认识芯片 {name}，自动安装芯片支持包失败{detail}。"
+                if self.debugger.auto_install_pack else
+                f"pyOCD 不认识芯片 {name}，缺少对应的 CMSIS 器件包。")
+        return [head + "\n"
+                f"    联网时手动安装：python -m pyocd pack install {name}\n"
+                f"    无法联网时：在能上网的电脑上下载对应的 .pack 文件（例如 "
+                f"http://www.keil.com/pack/Keil.STM32F1xx_DFP.2.4.1.pack），拷过来后写进 "
+                f"autodebug.config.yaml 的 debugger.pack_files 列表"]
+
+    @staticmethod
+    def _install_pack(name: str, timeout: float = 600.0) -> Tuple[bool, str]:
+        """Run `pyocd pack install`. The caller re-checks: its exit code is not proof."""
+        cmd = [sys.executable, "-m", "pyocd", "pack", "install", name]
+        try:
+            res = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8",
+                                 errors="replace", timeout=timeout)
+        except subprocess.TimeoutExpired:
+            return False, f"：{timeout:.0f} 秒内没有完成，网络可能太慢或被代理拦截"
+        except Exception as e:
+            return False, f"：{e}"
+        if res.returncode != 0:
+            lines = (res.stderr or res.stdout or "").strip().splitlines()
+            return False, f"：{lines[-1].strip()}" if lines else f"（退出码 {res.returncode}）"
+        return True, ""
 
     @staticmethod
     def _pyocd_knows_target(name: str) -> Optional[bool]:

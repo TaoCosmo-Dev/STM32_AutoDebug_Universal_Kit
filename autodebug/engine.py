@@ -16,6 +16,7 @@ runs exactly one pass, persists its state to .autodebug/state.json, and the next
 invocation picks the iteration counter and stall detection back up.
 """
 from dataclasses import dataclass, field
+import hashlib
 import json
 import os
 import subprocess
@@ -28,11 +29,13 @@ from .diagnostic_report import (
     DiagnosticReport, DiagnosticReporter,
     STATUS_BUILD_FAILED, STATUS_FLASH_FAILED, STATUS_HARD_FAULT,
     STATUS_ASSERTION_FAILED, STATUS_PASSED, STATUS_SERIAL_UNAVAILABLE, STATUS_TIMEOUT,
+    STATUS_TIMEBASE_SKEW,
 )
 from .fault_analyzer import CortexMFaultAnalyzer
 from .hardware_probe import HardwareProbe
-from .serial_monitor import SerialMonitor
+from .serial_monitor import SerialMonitor, port_hwid
 from .symbol_resolver import SymbolResolver
+from . import timebase
 
 STATUS_STALLED = "STALLED"
 STATUS_CONFIG_ERROR = "CONFIG_ERROR"
@@ -43,6 +46,7 @@ EXIT_CODES = {
     STATUS_FLASH_FAILED: 2,
     STATUS_HARD_FAULT: 3,
     STATUS_ASSERTION_FAILED: 3,
+    STATUS_TIMEBASE_SKEW: 3,             # a runtime defect with a located cause, like a fault
     STATUS_TIMEOUT: 4,
     STATUS_SERIAL_UNAVAILABLE: 4,
     STATUS_STALLED: 5,
@@ -53,11 +57,41 @@ EXIT_CODES = {
 def fresh_loop_state() -> dict:
     """The zero value for the persisted stall-tracking state."""
     return {"iteration": 0, "last_signature": None, "repeat_count": 0,
-            "recent_signatures": []}
+            "recent_signatures": [], "last_source_fingerprint": None}
+
+
+_SOURCE_EXTS = (".c", ".cc", ".cpp", ".h", ".hpp", ".s", ".asm", ".inc", ".uvprojx")
+_SKIP_DIRS = {".git", ".autodebug", "objects", "listings", "debugconfig", "__pycache__"}
+
+
+def source_fingerprint(root: str) -> Optional[str]:
+    """One hash over every source file under `root`, by content.
+
+    Content rather than mtime: Keil rewrites generated headers (RTE_Components.h) with
+    identical bytes on every build, and a timestamp would read that as an edit.
+    """
+    if not root or not os.path.isdir(root):
+        return None
+    digest = hashlib.sha1()
+    for dirpath, dirs, files in os.walk(root):
+        dirs[:] = sorted(d for d in dirs if d.lower() not in _SKIP_DIRS)
+        for name in sorted(files):
+            if not name.lower().endswith(_SOURCE_EXTS):
+                continue
+            path = os.path.join(dirpath, name)
+            try:
+                with open(path, "rb") as f:
+                    body = f.read()
+            except OSError:
+                continue
+            digest.update(os.path.relpath(path, root).lower().encode("utf-8", "replace"))
+            digest.update(hashlib.sha1(body).digest())
+    return digest.hexdigest()
 
 
 def fold_iteration_outcome(state: dict, signature: str, passed: bool,
-                           threshold: int = 2, window: int = 6):
+                           threshold: int = 2, window: int = 6,
+                           source_fingerprint: Optional[str] = None):
     """Fold one iteration's result into the stall-tracking state.
 
     Pure function -- no disk, no hardware -- so the escalation policy is testable
@@ -70,9 +104,23 @@ def fold_iteration_outcome(state: dict, signature: str, passed: bool,
     appears across the last `window` iterations. A signature is specific enough
     (file:line:code:message, or fault type + PC + CFSR) that seeing the very same one
     again really does mean the previous patch achieved nothing.
+
+    ...provided there was a patch. When `source_fingerprint` shows not one source file
+    changed since the last failure, the same failure again is not a patch that failed --
+    it is the environment (wiring, probe, pack) that has not been fixed yet. Counting it
+    would end the loop with "your last change had no effect, try another approach",
+    which steers the AI into rewriting code that was already correct. Such a rerun is
+    flagged `source_unchanged` in the returned state and neither counted nor recorded.
     """
     if passed:
         return fresh_loop_state(), False, False
+
+    if (source_fingerprint is not None
+            and source_fingerprint == state.get("last_source_fingerprint")
+            and signature == state.get("last_signature")):
+        new_state = dict(state)
+        new_state["source_unchanged"] = True
+        return new_state, False, False
 
     consecutive = (state.get("repeat_count", 0) + 1
                    if signature == state.get("last_signature") else 1)
@@ -88,6 +136,8 @@ def fold_iteration_outcome(state: dict, signature: str, passed: bool,
     new_state["last_signature"] = signature
     new_state["repeat_count"] = consecutive
     new_state["recent_signatures"] = recent
+    new_state["last_source_fingerprint"] = source_fingerprint
+    new_state["source_unchanged"] = False
     return new_state, seen >= 2, seen >= threshold
 
 
@@ -158,7 +208,10 @@ class AutoDebugEngine:
             pass
 
     def _persist_report(self, proj_dir: str, report: DiagnosticReport) -> str:
-        """Latest report at the project root (the AI contract) + an immutable archive copy."""
+        """Latest report beside the .uvprojx (the AI contract) + an immutable archive copy.
+
+        That directory is MDK-ARM/ in a CubeMX layout, not the folder above it.
+        """
         latest = os.path.join(proj_dir, "diagnostic_report.json")
         report.save(latest)
         if self.config.loop.archive_reports:
@@ -322,6 +375,12 @@ class AutoDebugEngine:
         self._log(f"\n>>> [第 {iteration} 轮] 步骤 4/4  判定结果并分析根本原因 ...")
 
         if test_res.passed:
+            # The token proves the tests ran, not that the clock is right: check that
+            # before calling it a pass, while the core is still running untouched.
+            skew, systick = self._check_timebase(resolver, proj_dir)
+            if skew:
+                return DiagnosticReporter.create_from_timebase_skew(
+                    iteration, uvprojx_path, test_res.raw_output, skew, systick)
             self._banner(f"[+] 实机测试通过！（收到通过信号：{test_res.matched_keyword}）")
             if self.config.loop.halt_target_on_finish:
                 self.probe.read_fault_registers()
@@ -378,7 +437,35 @@ class AutoDebugEngine:
             serial_wait, test_res.port, cpu_running,
             self.config.test.pass_keywords,
             serial_ok=test_res.opened, open_error=test_res.open_error,
-            firmware_problems=firmware_problems)
+            firmware_problems=firmware_problems,
+            port_hwid=port_hwid(test_res.port))
+
+    def _check_timebase(self, resolver, proj_dir: str):
+        """Measure the image's tick counters over SWD. Returns (skewed findings, SysTick
+        context); both empty when the check is off, impossible here, or passes."""
+        if not self.config.loop.timebase_check or resolver is None or not resolver.loaded:
+            return [], {}
+        read = self.probe.read_memory
+        try:
+            counters = timebase.find_counters(
+                resolver.get_symbol_address, read, self._source_root(proj_dir))
+            if not counters:
+                return [], {}
+            findings = timebase.measure(
+                counters, read, self.config.loop.timebase_sample_seconds)
+        except Exception as e:
+            self._log(f"[!] 时基自检未能完成（{e}），跳过。")
+            return [], {}
+        for f in findings:
+            self._log(f"    时基自检：{f.name} 实测 {f.measured_hz:.1f} Hz"
+                      f"（应为 {f.expected_hz:.0f} Hz）")
+        bad = timebase.skewed(findings, self.config.loop.timebase_tolerance)
+        if not bad:
+            return [], {}
+        context = timebase.systick_context(read, resolver.get_symbol_address)
+        self._log(f"[-] 时基错误：{bad[0].name} 实测 {bad[0].measured_hz:.1f} Hz，"
+                  f"应为 {bad[0].expected_hz:.0f} Hz。")
+        return bad, context
 
     # ------------------------------------------------------------------ the loop
 
@@ -444,11 +531,22 @@ class AutoDebugEngine:
                 last_report = report
 
                 # ---- stall detection ------------------------------------------------
+                # Taken after the build, so the kit's own project fixes (debug info,
+                # compiler record) are already in both runs being compared.
+                fingerprint = source_fingerprint(self._source_root(proj_dir))
                 state, report.repeated_failure, stalled = fold_iteration_outcome(
                     state, report.signature,
                     passed=report.status == STATUS_PASSED,
                     threshold=self.config.loop.stall_threshold,
-                    window=self.config.loop.stall_window)
+                    window=self.config.loop.stall_window,
+                    source_fingerprint=fingerprint)
+                report.source_unchanged = bool(state.get("source_unchanged"))
+                if report.source_unchanged:
+                    note = ("源码与上一轮完全相同，却再次得到同样的失败：根因不在代码。"
+                            "先排查接线、探针、串口链路、供电与芯片支持包，不要为此改代码。")
+                    report.next_actions.insert(0, note)
+                    report.ai_repair_prompt = f"> **{note}**\n\n{report.ai_repair_prompt}"
+                    self._log(f"[!] {note}")
 
                 if report.status == STATUS_PASSED:
                     self._save_state(proj_dir, state)
@@ -458,6 +556,7 @@ class AutoDebugEngine:
                 report_path = self._persist_report(proj_dir, report)
                 self._save_state(proj_dir, state)
                 self._log(f"[!] 诊断报告已写入：{report_path}")
+                self._log(f"    历史与状态：{os.path.join(proj_dir, self.config.loop.archive_dir)}")
 
                 if stalled:
                     times = max(state["repeat_count"],

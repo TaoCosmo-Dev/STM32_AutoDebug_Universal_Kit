@@ -83,6 +83,16 @@ if ($LASTEXITCODE -ne 0) {
     }
 }
 
+# pip on Windows can leave a package half-replaced under a "~" folder while reporting
+# success. deps_check.py clears that, tries every import, and force-reinstalls the rest.
+Write-Host "  校验依赖能否正常导入..."
+& $pyPath autodebug\deps_check.py
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "[ERROR] 依赖已安装但无法导入，按上面的提示处理后重新运行本脚本。" -ForegroundColor Red
+    Read-Host "按回车退出"
+    exit 1
+}
+
 # ---------------------------------------------------------------- 3/5 CMSIS packs
 if ($args -contains "--with-packs") {
     Write-Host "`n[3/5] 正在预装常用 STM32 芯片支持包（约 250MB，请耐心等待）..." -ForegroundColor Yellow

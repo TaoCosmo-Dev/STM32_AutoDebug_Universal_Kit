@@ -36,7 +36,7 @@ from autodebug.serial_monitor import SerialMonitor
 from autodebug.symbol_resolver import SymbolResolver
 
 PROTOCOL_VERSION = "2024-11-05"
-SERVER_INFO = {"name": "stm32-autodebug", "version": "2.4.3"}
+SERVER_INFO = {"name": "stm32-autodebug", "version": "2.4.4"}
 
 
 def log(msg: str) -> None:
@@ -111,6 +111,7 @@ def tool_closed_loop(args: Dict[str, Any]) -> Dict[str, Any]:
         "summary": report.summary if report else "",
         "signature": report.signature if report else "",
         "repeated_failure": report.repeated_failure if report else False,
+        "source_unchanged": report.source_unchanged if report else False,
         "next_actions": report.next_actions if report else [],
         "ai_repair_prompt": report.ai_repair_prompt if report else "",
         "serial_log_tail": report.serial_log_tail if report else "",

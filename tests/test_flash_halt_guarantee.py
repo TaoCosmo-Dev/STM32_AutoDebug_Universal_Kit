@@ -22,6 +22,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from autodebug.config import DebuggerConfig
 from autodebug.diagnostic_report import DiagnosticReporter, _unrecognized_target
 from autodebug.firmware_setup import _cmsis_header, _uses_std_periph
 from autodebug.hardware_probe import FlashResult, HardwareProbe
@@ -61,6 +62,7 @@ class FakeSession:
 
 def _probe_with(target):
     probe = HardwareProbe.__new__(HardwareProbe)
+    probe.config = DebuggerConfig()
     probe._session = FakeSession(target)
     probe.open = lambda: True
     return probe
@@ -118,6 +120,7 @@ class CpuLivenessTests(unittest.TestCase):
 class FlashHaltGuaranteeTests(unittest.TestCase):
     def test_cli_fallback_reports_halted_only_when_it_really_re_halted(self):
         probe = HardwareProbe.__new__(HardwareProbe)
+        probe.config = DebuggerConfig()
         probe.close = lambda: None
         probe._rehalt_after_cli = lambda: False
         import autodebug.hardware_probe as hp

@@ -85,13 +85,18 @@ def main() -> int:
     project_edits = parser.add_argument_group(
         "project edits", "Change the Keil project from the command line, so nothing needs "
                          "the uVision GUI")
-    project_edits.add_argument("--add-source", nargs="+", metavar="FILE",
+    # action="extend": repeating a flag must add to the list. Plain nargs="+" keeps only
+    # the last occurrence, so `--add-include A --add-include B` silently dropped A.
+    project_edits.add_argument("--add-source", nargs="+", action="extend", metavar="FILE",
                                help="Add source file(s) to the project (a .c the AI just wrote "
                                     "is invisible to the linker until this runs)")
-    project_edits.add_argument("--add-include", nargs="+", metavar="DIR",
+    project_edits.add_argument("--add-include", nargs="+", action="extend", metavar="DIR",
                                help="Add include path(s)")
-    project_edits.add_argument("--add-define", nargs="+", metavar="NAME",
+    project_edits.add_argument("--add-define", nargs="+", action="extend", metavar="NAME",
                                help="Add preprocessor define(s)")
+    project_edits.add_argument("--enable-hal", nargs="+", action="extend", metavar="MODULE",
+                               help="Enable HAL module(s), e.g. adc i2c: uncomment the module "
+                                    "macro, copy in the driver files if missing, register them")
     project_edits.add_argument("--group", default="AutoDebug",
                                help="Group name for --add-source (default: AutoDebug)")
     project_edits.add_argument("--install-tracer", action="store_true",
@@ -135,7 +140,27 @@ def main() -> int:
         if args.add_define:
             editor.add_defines(args.add_define, target_name=args.target)
         result = editor.save()
-        print(f"[project] {result.summary()}")
+        for note in (result.notes or ["无需改动：要加的内容工程里都已经有了"]):
+            print(f"[project] {note}")
+        # Echo the end state, not only the delta: a path that did not land is then
+        # visible at once instead of surfacing later as "cannot open source input file".
+        if args.add_include:
+            print("[project] 当前包含路径：")
+            for p in editor.current_include_paths(args.target):
+                print(f"    {p}")
+        if args.add_define:
+            print(f"[project] 当前宏定义：{', '.join(editor.current_defines(args.target))}")
+        edited = True
+
+    if args.enable_hal:
+        from autodebug.hal_modules import enable_hal_modules
+        result, errors = enable_hal_modules(proj_path, args.enable_hal, target_name=args.target)
+        for note in result.notes:
+            print(f"[hal] {note}")
+        for err in errors:
+            print(f"[hal][x] {err}", file=sys.stderr)
+        if errors:
+            return EXIT_CODES[STATUS_CONFIG_ERROR]
         edited = True
 
     if args.install_tracer:
@@ -210,6 +235,8 @@ def main() -> int:
     # ---- full closed loop ------------------------------------------------------------
     result = engine.run_closed_loop(proj_path, args.target)
     report = result.last_report
+    archive_dir = os.path.join(os.path.dirname(os.path.abspath(proj_path)),
+                               config.loop.archive_dir)
 
     if args.json:
         print(json.dumps({
@@ -221,6 +248,8 @@ def main() -> int:
             "summary": report.summary if report else "",
             "signature": report.signature if report else "",
             "repeated_failure": report.repeated_failure if report else False,
+            "source_unchanged": report.source_unchanged if report else False,
+            "archive_dir": archive_dir,
             "next_actions": report.next_actions if report else [],
             "messages": result.messages,
         }, indent=2, ensure_ascii=False))
@@ -233,9 +262,13 @@ def main() -> int:
         print(f"  [AUTODEBUG FAIL] 状态={result.final_status}（退出码 {result.exit_code}）")
         if report:
             print(f"  原因: {report.summary}")
-            if report.repeated_failure:
+            if report.source_unchanged:
+                print("  ⚠ 源码与上一轮相同，失败也相同：根因不在代码。"
+                      "先查接线、探针、串口链路、供电与芯片支持包，不要改代码。")
+            elif report.repeated_failure:
                 print("  ⚠ 与上一轮完全相同的失败，上一次修改没有起效，请换思路。")
             print(f"  完整诊断报告：{result.report_path}")
+            print(f"  历史与状态目录：{archive_dir}")
             print("\n" + report.ai_repair_prompt)
     print("=" * 63)
     return result.exit_code

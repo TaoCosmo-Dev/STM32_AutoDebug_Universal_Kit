@@ -168,6 +168,32 @@ class KeilProjectEditor:
             pieces.append(self.text[cursor:])
             self.text = "".join(pieces)
 
+    def _compiler_controls(self, target_name: Optional[str]) -> str:
+        """The C compiler's <VariousControls> body of the first selected target."""
+        for _start, _end, block, _name in self._iter_targets(target_name):
+            vc = _VARIOUS_CONTROLS.search(block)
+            return vc.group(2) if vc else ""
+        return ""
+
+    def current_include_paths(self, target_name: Optional[str] = None) -> List[str]:
+        m = _INCLUDE_PATH.search(self._compiler_controls(target_name))
+        return [p for p in (m.group(1).split(";") if m else []) if p.strip()]
+
+    def current_defines(self, target_name: Optional[str] = None) -> List[str]:
+        m = _DEFINE.search(self._compiler_controls(target_name))
+        return [d.strip() for d in (m.group(1).split(",") if m else []) if d.strip()]
+
+    def group_containing(self, file_suffix: str,
+                         target_name: Optional[str] = None) -> Optional[str]:
+        """Name of the group that already holds a file ending in `file_suffix`."""
+        suffix = file_suffix.lower()
+        for _start, _end, block, _name in self._iter_targets(target_name):
+            for g in _GROUP_BLOCK.finditer(block):
+                paths = re.findall(r"<FilePath>(.*?)</FilePath>", g.group(2), re.S)
+                if any(p.strip().lower().replace("/", "\\").endswith(suffix) for p in paths):
+                    return g.group(1).strip()
+        return None
+
     # ---------------------------------------------------------------- operations
 
     def set_debug_information(self, target_name: Optional[str] = None) -> "KeilProjectEditor":

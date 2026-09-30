@@ -15,6 +15,9 @@ debugger:
   probe_id: null          # null = first connected probe, never prompts
   frequency_hz: 4000000
   connect_mode: "under-reset"   # survives firmware that reconfigures the SWD pins
+  auto_install_pack: true # 缺芯片支持包时，闭环开始前自动 `pyocd pack install`（需联网）
+  pack_files: []          # 离线用：本地 .pack 文件路径列表，例如
+                          #   - "D:/packs/Keil.STM32F1xx_DFP.2.4.1.pack"
 
 build:
   timeout_seconds: 600    # a cold full rebuild of a HAL project blows past 120s
@@ -50,4 +53,8 @@ loop:
   archive_reports: true   # keep .autodebug/iter_NN_*.json for every iteration
   archive_dir: ".autodebug"
   stall_threshold: 2      # identical failure twice in a row -> stop and escalate
+                          # (a rerun with unchanged source is not counted: see source_unchanged)
   halt_target_on_finish: false
+  timebase_check: true    # 测试通过后经 SWD 实测 uwTick / xTickCount 的走速
+  timebase_sample_seconds: 0.5
+  timebase_tolerance: 0.05  # 偏差超过 5% 判 TIMEBASE_SKEW（退出码 3）

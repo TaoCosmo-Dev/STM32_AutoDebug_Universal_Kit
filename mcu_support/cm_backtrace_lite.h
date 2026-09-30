@@ -96,7 +96,21 @@ void cm_backtrace_putchar(char c);
     lr_exc is the EXC_RETURN value in LR on entry to the handler. */
 void cm_backtrace_fault_handler(uint32_t *stack_frame, uint32_t lr_exc);
 
-/** Assertion hook. Prints a line the host parser understands, then parks. */
+/** Assertion hook. Prints a line the host parser understands, then parks.
+ *
+ *  Wiring FreeRTOS's configASSERT to it -- in FreeRTOSConfig.h, include this header
+ *  instead of writing your own prototype. A hand-written one with `int line` clashes
+ *  with the uint32_t here (armcc #147-D):
+ *
+ *      #include "cm_backtrace_lite.h"
+ *      #define configASSERT(x)  do { if ((x) == 0) \
+ *              cm_assert_failed(__FILE__, (uint32_t)__LINE__, #x); } while (0)
+ *
+ *  Passing #x puts the failed condition itself in the report, not just the line.
+ *  The #include belongs inside the block a CubeMX-generated FreeRTOSConfig.h already
+ *  has for C-only declarations, `#if defined(__ICCARM__) || defined(__CC_ARM) ||
+ *  defined(__GNUC__)`, because that header is also read by some ports' assembler.
+ */
 void cm_assert_failed(const char *file, uint32_t line, const char *expr);
 
 /** Print a NUL-terminated string through the registered sink (safe from a fault handler). */

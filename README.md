@@ -2,10 +2,10 @@
 
 **面向 AI 代理的 STM32 闭环开发工具链**：编译、烧录、实机验证、崩溃归因，全部以命令行驱动，结果以退出码交付。
 
-[![GitHub Release](https://img.shields.io/badge/Release-v2.4.3-blue?style=flat-square&logo=github)](https://github.com/TaoCosmo-Dev/STM32_AutoDebug_Universal_Kit/releases)
+[![GitHub Release](https://img.shields.io/badge/Release-v2.4.4-blue?style=flat-square&logo=github)](https://github.com/TaoCosmo-Dev/STM32_AutoDebug_Universal_Kit/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg?style=flat-square)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-STM32%20%7C%20Cortex--M-orange?style=flat-square)]()
-[![Tests](https://img.shields.io/badge/离线自测-133%20项通过-brightgreen?style=flat-square)]()
+[![Tests](https://img.shields.io/badge/离线自测-168%20项通过-brightgreen?style=flat-square)]()
 [![MCP](https://img.shields.io/badge/MCP-stdio%20server-purple?style=flat-square)]()
 
 ---
@@ -343,7 +343,7 @@ cd STM32_AutoDebug_Universal_Kit
 
 | 模板 | 适合 | 下载 |
 |---|---|---|
-| **HAL 版**（推荐） | 平时用 STM32CubeMX + HAL 库的开发者。附带 `Template.ioc`，可用 CubeMX 打开修改引脚和外设 | **[STM32F103C8_HAL_Template.zip](https://github.com/TaoCosmo-Dev/STM32_AutoDebug_Universal_Kit/releases/download/template-f103c8-hal-v1.0/STM32F103C8_HAL_Template.zip)**（约 550 KB） |
+| **HAL 版**（推荐） | 平时用 STM32CubeMX + HAL 库的开发者。附带 `Template.ioc`，可用 CubeMX 打开修改引脚和外设 | **[STM32F103C8_HAL_Template.zip](https://github.com/TaoCosmo-Dev/STM32_AutoDebug_Universal_Kit/releases/download/template-f103c8-hal-v1.1/STM32F103C8_HAL_Template.zip)**（约 1.2 MB） |
 | 标准库版 | 使用标准外设库（StdPeriph）的开发者 | [STM32F103C8_StdPeriph_Template.zip](https://github.com/TaoCosmo-Dev/STM32_AutoDebug_Universal_Kit/releases/download/template-f103c8-v1.0/STM32F103C8_StdPeriph_Template.zip)（约 300 KB） |
 
 | 项 | 内容 |
@@ -352,16 +352,21 @@ cd STM32_AutoDebug_Universal_Kit
 | 库 | 全部随工程提供，不依赖 RTE 组件或外部 pack。HAL 版为 STM32Cube FW_F1 V1.8.7，标准库版为 V3.6.2 |
 | 已接入 | 崩溃追踪器（USART1）、通过令牌、`printf` 重定向；`--check-firmware` 直接通过 |
 | 编译验证 | 两个版本均在 AC5 5.06u5 下 0 Error / 0 Warning，AC6 6.7 下 0 Error |
+| 上板验证 | HAL 版已在 STM32F103C8T6 + ST-Link V2-1 上实测：烧录校验一致、LED 翻转、时基正常；标准库版尚未上板 |
 | 接线 | SWD 四线；PA9 / PA10 接 USB-TTL；PC13 为板载 LED |
 
-HAL 版的 NVIC 配置中取消了四个故障中断的「Generate IRQ handler」，因此在 CubeMX 里改完外设重新生成代码后，崩溃追踪器、工程设置和 `USER CODE` 区块内的代码都不会丢失（已实测）。
+HAL 版的 NVIC 配置中取消了四个故障中断的「Generate IRQ handler」，因此在 CubeMX 里改完外设重新生成代码后，崩溃追踪器、工程设置和 `USER CODE` 区块内的代码都不会丢失（已实测）。v1.1 起还带全部 HAL 驱动，配合 `--enable-hal` 在没装 CubeMX 的电脑上也能直接启用新外设。
 
-也可以让代理自行下载（Windows 10 及以上自带 `curl.exe` 与 `tar`）：
+> 只插一根 USB 线、用板载 ST-Link 的虚拟串口时，先确认开发板把它接到了 MCU 的哪个 USART。独立的最小系统板通常没有这条线：串口打得开，却一个字节都收不到。
+
+也可以让代理自行下载（Windows 10 及以上自带 `curl.exe`）：
 
 ```bash
-curl.exe -L -o template.zip https://github.com/TaoCosmo-Dev/STM32_AutoDebug_Universal_Kit/releases/download/template-f103c8-hal-v1.0/STM32F103C8_HAL_Template.zip
-tar -xf template.zip
+curl.exe -L -o template.zip https://github.com/TaoCosmo-Dev/STM32_AutoDebug_Universal_Kit/releases/download/template-f103c8-hal-v1.1/STM32F103C8_HAL_Template.zip
+python -m zipfile -e template.zip .
 ```
+
+解压用 `python -m zipfile`，任何终端都能用；Git Bash 里的 `tar` 是 GNU tar，不认 zip。
 
 模板以 Release 附件的形式发布，没有放进仓库代码：标准库版中的 ST 标准库使用 SLA0044 许可证，不能并入本仓库的 MIT 许可范围；HAL 版体积较大，也保持一致。压缩包内附各部分的许可证原文。
 
@@ -398,7 +403,7 @@ tar -xf template.zip
 | `mcu_support/` | `cm_backtrace_lite.c/.h`，运行于目标芯片的崩溃追踪器。安装追踪器时复制至工程并编译进固件 |
 | `templates/` | 硬件参数确认清单与接线指南模板，供代理在需求对齐阶段参考 |
 | `docs/ADVANCED.md` | 闭环时序、完整配置项、MCP 接入、架构说明 |
-| `tests/` | 133 项离线自测，无需硬件：`python -m unittest discover -s tests` |
+| `tests/` | 离线自测，无需硬件：`python -m unittest discover -s tests` |
 
 ### 代理调用的常用命令
 
@@ -408,6 +413,7 @@ python run_autodebug.py --project MDK-ARM/App.uvprojx --no-flash   # 仅编译�
 python run_autodebug.py --project MDK-ARM/App.uvprojx --json       # 机器可读输出
 python run_autodebug.py --project MDK-ARM/App.uvprojx --check-firmware   # 固件契约自检
 python run_autodebug.py --project MDK-ARM/App.uvprojx --add-source User/new.c
+python run_autodebug.py --project MDK-ARM/App.uvprojx --enable-hal adc i2c   # HAL 工程启用新外设
 python run_autodebug.py --project MDK-ARM/App.uvprojx --install-tracer --uart USART1
 python run_autodebug.py --list-devices                             # 列出调试探针与串口
 ```
@@ -423,12 +429,14 @@ python run_autodebug.py --list-devices                             # 列出调�
 | **0** | `TEST_PASSED` | 编译 0 Error、烧录成功、串口收到通过令牌 | 交付，停止修改 |
 | 1 | `BUILD_FAILED` | 编译或链接错误，报告含 `文件:行号` | 按报告修改源码后重试 |
 | 2 | `FLASH_FAILED` | 探针、接线、供电或读保护问题 | 非代码问题，不应修改源码 |
-| 3 | `HARD_FAULT` / `ASSERTION_FAILED` | 运行时崩溃，已定位至源码行 | 按根本原因修改后重试 |
-| 4 | `TIMEOUT` / `SERIAL_UNAVAILABLE` | 未收到通过令牌，或串口不可用 | 检查串口重定向、波特率、测试路径是否到达输出点 |
+| 3 | `HARD_FAULT` / `ASSERTION_FAILED` / `TIMEBASE_SKEW` | 运行时崩溃，已定位至源码行；或测试虽通过，但经 SWD 实测时基偏差超过 5% | 按根本原因修改后重试 |
+| 4 | `TIMEOUT` / `SERIAL_UNAVAILABLE` | 未收到通过令牌，或串口不可用 | 一个字节都没收到（签名 `TIMEOUT\|no bytes`）时先查链路；否则检查串口重定向、波特率、测试路径是否到达输出点 |
 | 5 | `STALLED` | 同一失败反复出现 | 终止自动修复，说明卡点并请求人工决策 |
 | 6 | `CONFIG_ERROR` | 未找到 Keil | 安装环境，或在 `autodebug.config.yaml` 中指定 `keil.uv4_path` |
 
-结构化诊断写入工程根目录 `diagnostic_report.json`，历史记录归档于 `.autodebug/`。
+结构化诊断写入 **`.uvprojx` 所在目录**的 `diagnostic_report.json`，历史与状态在同目录的 `.autodebug/`（CubeMX 工程中即 `MDK-ARM/`）。失败时两个路径都会打印在日志中。
+
+**测试通过后还有一道时基自检。** 通过令牌只能说明测试跑完了，不能说明时间是对的：FreeRTOS 里多定义一行 `configSYSTICK_CLOCK_HZ`，SysTick 就会慢 8 倍，所有延时都被拉长，固件却照样打印通过令牌。因此闭环在收到令牌后，会经 SWD 读两次 `uwTick`（HAL）与 `xTickCount`（FreeRTOS），与电脑时钟对比；偏差超过 5% 即判 `TIMEBASE_SKEW`，并在报告中附上 SysTick 寄存器现场。读内存不会暂停内核，整个过程约 0.5 秒，可用 `loop.timebase_check: false` 关闭。
 
 ---
 
@@ -483,9 +491,10 @@ python run_autodebug.py --project MDK-ARM/App.uvprojx --install-tracer --uart US
 | 退出码 6 | Keil 未安装或路径不正确 | 安装 Keil，或在 `autodebug.config.yaml` 中指定 `keil.uv4_path` |
 | 编译过程被强制终止 | Keil 弹出模态对话框（缺少器件包、License 异常、工程被 IDE 占用） | 关闭 uVision，手动打开工程确认无弹窗 |
 | 退出码 2，未检测到探针 | 调试器未连接，或被 Keil / STM32CubeProgrammer 占用 | 以 `--list-devices` 确认；关闭占用程序 |
-| 退出码 2，`target type X not recognized` | 非硬件问题，为缺少 CMSIS 器件包 | v2.4.0 起由 preflight 提前拦截，并直接给出 `python -m pyocd pack install <芯片>` |
+| 退出码 2，`target type X not recognized` | 非硬件问题，为缺少 CMSIS 器件包 | v2.4.4 起 preflight 会自动安装（需联网，首次约 1-2 分钟）。无法联网时，把 `.pack` 文件路径写进 `debugger.pack_files` 即可离线使用 |
 | 编译报 `#8: missing closing quote` 但引号无误 | 源码含 UTF-8 中文字面量，AC5 按 GBK 解析 | 中文只放注释；`--check-firmware` 会点名文件与行号 |
 | 退出码 2，无法连接目标 | 固件将 SWD 引脚复用为普通 IO，或芯片处于读保护状态 | 保持 `connect_mode: under-reset`；RDP Level 1 需整片擦除解锁 |
+| 退出码 4，一个字节都没收到 | 最常见的是物理链路：TX/RX 没接、没共地，或板载 ST-Link 虚拟串口没连到固件所用的 USART | 报告会先提示查链路，识别出 ST-Link 虚拟串口时会直接点明。确认链路后再查串口重定向与波特率 |
 | 退出码 4，串口无数据 | 串口重定向未实现、波特率不匹配、COM 口被占用 | 前两项由代理修复（`--check-firmware` 会明确指出）；关闭占用串口的调试助手 |
 | 退出码 4，报告称只等了 3 秒 | 源码中找不到通过令牌，完整等待不可能成功，串口只保留抓崩溃的时间窗 | 在测试通过路径上打印令牌。令牌若位于工程目录之外，设 `test.precheck_firmware: false` |
 | 退出码 4，有输出但无令牌 | 测试未到达输出点 | 先查看未满足的固件契约，再参考 CPU 存活遥测：PC 值不变表示停留在死等循环 |
@@ -493,6 +502,10 @@ python run_autodebug.py --project MDK-ARM/App.uvprojx --install-tracer --uart US
 | 未改动源码，每次编译仍重编全部文件 | 工程记录的编译器版本（`<pCCUsed>`）与本机不符或缺失。IDE 会自动更正并保存，`UV4 -b` 只在内存中更正、不保存，于是每次都全量重编 | v2.4.1 起首次编译后自动写回本机实际使用的版本（`auto_sync_compiler`），STM32CubeMX 生成的工程自 v2.4.3 起同样生效；HAL 工程每轮可节省数十秒 |
 | 报告记录"故障地址无效" | imprecise 总线错误（写缓冲延迟所致） | 在可疑的写操作后插入 `__DSB()` 以缩小范围 |
 | 连续多轮相同错误 | 上一次修改未生效 | 报告中 `repeated_failure` 为 true，应更换排查方向 |
+| 源码没改，再跑一次失败相同 | 根因在环境而非代码 | 报告中 `source_unchanged` 为 true，不计入卡住判定。应排查接线、探针、串口链路、芯片支持包，不要改代码 |
+| 编译报 `stm32f1xx_hal_xxx.h` 找不到、`XXX_HandleTypeDef` 未定义 | HAL 工程缺少该外设模块（宏未打开、驱动文件缺失、未注册进工程） | 运行 `--enable-hal xxx`，三件事一次完成；报告会直接给出命令 |
+| 退出码 3，`TIMEBASE_SKEW` | 时基走速不对，常见为 SysTick 时钟源与重装载值不匹配 | 实测正好差 8 倍时，先删掉 FreeRTOSConfig.h 中的 `configSYSTICK_CLOCK_HZ`；其次核对 `HSE_VALUE` 与 PLL 设置 |
+| `--add-include` 写了多次只生效一个 | v2.4.4 之前的参数解析缺陷 | 已修复，同一参数可写多次；执行后会回显当前完整列表 |
 
 </details>
 
@@ -514,7 +527,7 @@ python run_autodebug.py --project MDK-ARM/App.uvprojx --install-tracer --uart US
 ## 验证
 
 ```bash
-python -m unittest discover -s tests     # 133 项离线自测，无需硬件
+python -m unittest discover -s tests     # 168 项离线自测，无需硬件
 ```
 
 每次 push 与 Pull Request 由 GitHub Actions 在 Windows + Python 3.10 / 3.12 环境下自动执行，并校验版本号三处一致性与测试数量徽章。

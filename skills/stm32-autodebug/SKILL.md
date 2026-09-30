@@ -40,13 +40,16 @@ ls *.uvprojx MDK-ARM/*.uvprojx run_autodebug.py 2>/dev/null
 
 ```bash
 # HAL 版（默认）：得到 STM32F103C8_HAL_Template/，工程在其 MDK-ARM/Template.uvprojx
-curl.exe -L -o template.zip https://github.com/TaoCosmo-Dev/STM32_AutoDebug_Universal_Kit/releases/download/template-f103c8-hal-v1.0/STM32F103C8_HAL_Template.zip
+curl.exe -L -o template.zip https://github.com/TaoCosmo-Dev/STM32_AutoDebug_Universal_Kit/releases/download/template-f103c8-hal-v1.1/STM32F103C8_HAL_Template.zip
 # 标准库版：把上面的地址换成
 #   .../releases/download/template-f103c8-v1.0/STM32F103C8_StdPeriph_Template.zip
-tar -xf template.zip
+python -m zipfile -e template.zip .
 ```
 
+解压用 `python -m zipfile`：任何终端都能用。Git Bash 里的 `tar` 是 GNU tar，不认 zip。
+
 HAL 版的代码只能写在 `USER CODE BEGIN/END` 区块内，否则用户用 CubeMX 重新生成时会被覆盖。
+要用模板里还没启用的外设（ADC、I2C…）时，运行 `--enable-hal adc i2c`，不要手动改 hal_conf.h 和工程文件。
 
 > 不要自己手写 `.uvprojx`。手写工程是首次接入最大的耗时来源，而且出错时不受退出码契约保护。
 
@@ -81,7 +84,10 @@ python run_autodebug.py --project "MDK-ARM/App.uvprojx"
 2. **改完 STM32 源码不许直接收工**，必须跑完闭环再回话；不要自己拼编译/烧录命令绕过脚本（它内部「先 halt 再开串口后 resume」的顺序是有讲究的）。
 3. **谋定而后动。** 新项目 / 新外设先追问 5 类硬件参数（时钟树、引脚冲突、外设指标、驱动模式、系统框架），用户确认后才编码。清单在 `AGENTS.md` 第 2 节。
 
-拿到非 0 退出码：读工程根目录 `diagnostic_report.json` 的 `ai_repair_prompt` 与 `next_actions` → 只改与根因直接相关的文件 → 重跑。若 `repeated_failure: true`，说明上次修改没生效，**换思路，别重复同类改动**。
+拿到非 0 退出码：读 `.uvprojx` 所在目录的 `diagnostic_report.json`（CubeMX 工程就是 `MDK-ARM/` 下）的 `ai_repair_prompt` 与 `next_actions` → 只改与根因直接相关的文件 → 重跑。
+- `repeated_failure: true`：上次修改没生效，**换思路，别重复同类改动**。
+- `source_unchanged: true`：源码没改、失败却相同，**根因不在代码**——查接线、探针、串口链路、芯片支持包，别改代码。
+- 签名是 `TIMEOUT|no bytes`（串口一个字节都没收到）：先查物理链路，再怀疑固件。
 
 ---
 
@@ -94,6 +100,7 @@ python "KIT/run_autodebug.py" --project MDK-ARM/App.uvprojx --json       # 机�
 python "KIT/run_autodebug.py" --project MDK-ARM/App.uvprojx --no-flash   # 只编译
 python "KIT/run_autodebug.py" --project MDK-ARM/App.uvprojx --check-firmware   # 固件契约自检
 python "KIT/run_autodebug.py" --project MDK-ARM/App.uvprojx --add-source User/new.c
+python "KIT/run_autodebug.py" --project MDK-ARM/App.uvprojx --enable-hal adc i2c   # HAL 启用新外设
 python "KIT/run_autodebug.py" --project MDK-ARM/App.uvprojx --install-tracer --uart USART1
 python "KIT/run_autodebug.py" --list-devices                             # 列探针与串口
 ```

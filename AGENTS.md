@@ -19,13 +19,13 @@ echo $?    # PowerShell: $LASTEXITCODE
 | 0 | `TEST_PASSED` | 编译 + 烧录 + 实机验收全通过 | 封版交付，不要再改 |
 | 1 | `BUILD_FAILED` | 编译 / 链接错误 | 按报告改源码，重跑 |
 | 2 | `FLASH_FAILED` | 探针、接线、供电、读保护问题 | **这不是代码问题**，把接线/供电排查项交给用户，别改代码 |
-| 3 | `HARD_FAULT` / `ASSERTION_FAILED` | 运行时崩溃，已定位到源码行 | 按根因改源码，重跑 |
-| 4 | `TIMEOUT` / `SERIAL_UNAVAILABLE` | 没等到通过令牌 / 串口打不开 | 检查串口重定向、波特率、测试是否真的跑到输出点 |
+| 3 | `HARD_FAULT` / `ASSERTION_FAILED` / `TIMEBASE_SKEW` | 运行时崩溃已定位到源码行；或测试通过了但时基实测不对（如 SysTick 慢 8 倍） | 按根因改源码，重跑 |
+| 4 | `TIMEOUT` / `SERIAL_UNAVAILABLE` | 没等到通过令牌 / 串口打不开 | 签名是 `TIMEOUT\|no bytes`（一个字节都没收到）时**先查接线与串口链路**；否则检查串口重定向、波特率、测试是否真的跑到输出点 |
 | 5 | `STALLED` | 连续两轮完全相同的失败 | **停止盲改**，向用户说明卡点并请求决策 |
 | 6 | `CONFIG_ERROR` | 找不到 Keil 等工具链 | 提示用户装环境或改 `autodebug.config.yaml` |
 
-结构化诊断始终写在工程根目录 `diagnostic_report.json`，历史归档在 `.autodebug/`。
-需要机器可读输出时加 `--json`。
+结构化诊断写在 **`.uvprojx` 所在目录**的 `diagnostic_report.json`，历史与状态在同目录的 `.autodebug/`
+（CubeMX 工程里就是 `MDK-ARM/`，不是它的上一级）。失败时日志会打印这两个路径。需要机器可读输出时加 `--json`。
 
 ---
 
@@ -52,6 +52,8 @@ python run_autodebug.py --project "MDK-ARM/YourProject.uvprojx"
 2. 只改与根因直接相关的文件；
 3. 重跑闭环；
 4. 若报告里 `repeated_failure: true`，说明**你上一次的修改完全没有生效**，换思路，不要重复同类改动。
+5. 若报告里 `source_unchanged: true`，说明源码一行没改、失败却和上次相同——**根因不在代码**。
+   去查接线、探针、串口链路、供电、芯片支持包，或把这些交给用户，**不要为此改代码**。
 
 每轮 AI 修改前，脚本会用 `git stash create` + tag 打一个**不改动工作区**的还原点（`autodebug/iter-NN`），改坏了可以 `git checkout <sha> -- .` 回滚。
 
@@ -88,10 +90,12 @@ python run_autodebug.py --project "MDK-ARM/YourProject.uvprojx"
   默认用 **HAL 版**（CubeMX 生成，带 `Template.ioc`）；用户明确说用标准库时才用标准库版：
 
   ```bash
-  curl.exe -L -o template.zip https://github.com/TaoCosmo-Dev/STM32_AutoDebug_Universal_Kit/releases/download/template-f103c8-hal-v1.0/STM32F103C8_HAL_Template.zip
+  curl.exe -L -o template.zip https://github.com/TaoCosmo-Dev/STM32_AutoDebug_Universal_Kit/releases/download/template-f103c8-hal-v1.1/STM32F103C8_HAL_Template.zip
   # 标准库版：.../releases/download/template-f103c8-v1.0/STM32F103C8_StdPeriph_Template.zip
-  tar -xf template.zip
+  python -m zipfile -e template.zip .
   ```
+
+  解压用 `python -m zipfile`：任何终端都能用。Git Bash 里的 `tar` 是 GNU tar，不认 zip。
 
   HAL 工程里你写的代码必须放在 `/* USER CODE BEGIN ... */` 与 `/* USER CODE END ... */` 之间，
   否则用户用 CubeMX 重新生成时会被覆盖。
@@ -111,8 +115,15 @@ python run_autodebug.py --project MDK-ARM/App.uvprojx --add-source User/dht11.c 
 | 加源文件 | `--add-source a.c b.c`（可加 `--group 组名`） |
 | 加包含路径 | `--add-include Drivers/Inc` |
 | 加宏定义 | `--add-define USE_FULL_ASSERT` |
+| HAL 工程用上新外设 | `--enable-hal adc i2c`：一次完成「打开 hal_conf.h 里的模块宏 + 补驱动文件 + 注册进工程」 |
 
-以上均**幂等**，重复执行不会重复添加；首次改动会自动备份 `*.uvprojx.autodebug.bak`。
+以上均**幂等**，重复执行不会重复添加；同一个参数可以写多次（`--add-include A --add-include B`），都会生效；
+执行后会回显当前完整的包含路径 / 宏定义列表，核对一眼。首次改动会自动备份 `*.uvprojx.autodebug.bak`。
+
+编译报 `cannot open source input file "stm32f1xx_hal_adc.h"`、`ADC_HandleTypeDef is undefined`、
+`Undefined symbol HAL_ADC_Init` 这类错误，就是缺 HAL 模块，报告会直接给出对应的 `--enable-hal` 命令。
+驱动文件先从工程里找，再从本机 CubeMX 仓库（`%USERPROFILE%\STM32Cube\Repository`）按 `.ioc` 记录的版本拷。
+工程带 `.ioc` 的，长期要用的外设最好也在 CubeMX 里启用，否则下次重新生成会被还原。
 调试信息（Debug Information）在每次编译前自动打开，无需处理。
 
 ### 3.2 崩溃追踪器一条命令装好
@@ -139,6 +150,9 @@ python run_autodebug.py --project MDK-ARM/App.uvprojx --install-tracer --uart US
 2. **`cm_backtrace_init()`**：`main()` 里外设初始化之前调用，开启子异常分类与除零陷阱。
 
 断言统一用 `AUTO_ASSERT(expr)`，其输出可被直接解析成 `文件:行号`。
+FreeRTOS 的 `configASSERT` 接到同一个出口：在 FreeRTOSConfig.h 里 `#include "cm_backtrace_lite.h"`，
+**不要自己再写一遍 `cm_assert_failed` 的原型**（写成 `int line` 会和头文件里的 `uint32_t` 冲突，报 #147-D）。
+可直接抄的写法在 `cm_backtrace_lite.h` 中 `cm_assert_failed` 的注释里。
 
 ### 3.4 第一次跑闭环前先自检
 
@@ -163,6 +177,8 @@ python run_autodebug.py --project MDK-ARM/App.uvprojx --check-firmware
 6. **硬件安全限流**：驱动 WS2812B 矩阵、电机、MOS 管前，软件层必须做全局电流与占空比限幅。
 7. **栈够用**：大数组不要放局部变量；`MSTKERR`/`STKERR` 就是栈溢出的直接证据。
 8. **AC5 下字符串字面量必须纯 ASCII**：`armcc` 按本机代码页解析源文件（中文 Windows 上是 GBK），UTF-8 中文串会报 `main.c(42): error: #8: missing closing quote`。**这个报错指向引号而不是编码，会把人引向语法排查，怎么查都查不出来**。中文只放注释里——注释不参与编译，不受影响。`--check-firmware` 会扫描并点名文件与行号。
+9. **测时间用板子上的时钟，不用串口行距**：验证周期、延时是否准确时，在**产生该事件的任务里**打印目标侧的 tick（`HAL_GetTick()` / `xTaskGetTickCount()`）。电脑按「收到一行的时刻」打的时间戳不可信：USB 虚拟串口成批送数据，两行相隔 500 ms 也可能在同一时刻到达。看到物理上不可能的数据（如 0.00 s 间隔），先怀疑量具。
+   时基本身是否正确不用你测：测试通过后套件会经 SWD 实测 `uwTick` / `xTickCount` 的走速，偏差超过 5% 判 `TIMEBASE_SKEW`（退出码 3）。
 
 ---
 
@@ -183,6 +199,7 @@ python run_autodebug.py --project MDK-ARM/App.uvprojx          # 完整闭环
 python run_autodebug.py --project MDK-ARM/App.uvprojx --json   # 机器可读
 python run_autodebug.py --project MDK-ARM/App.uvprojx --no-flash  # 只编译
 python run_autodebug.py --project MDK-ARM/App.uvprojx --add-source User/new.c   # 新文件入工程
+python run_autodebug.py --project MDK-ARM/App.uvprojx --enable-hal adc i2c      # HAL 工程启用新外设
 python run_autodebug.py --project MDK-ARM/App.uvprojx --install-tracer --uart USART1
 python run_autodebug.py --project MDK-ARM/App.uvprojx --check-firmware          # 固件契约自检
 python run_autodebug.py --list-devices                          # 列探针与串口

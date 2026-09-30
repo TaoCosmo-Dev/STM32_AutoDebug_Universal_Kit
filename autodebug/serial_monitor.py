@@ -139,6 +139,19 @@ def score_port(description: str, hwid: str, cfg: SerialConfig) -> int:
     return score
 
 
+def port_hwid(port: Optional[str]) -> str:
+    """USB hardware id of a COM port ("USB VID:PID=0483:374B SER=..."), or ""."""
+    if not port:
+        return ""
+    try:
+        for p in serial.tools.list_ports.comports():
+            if p.device == port:
+                return p.hwid or ""
+    except Exception:
+        pass
+    return ""
+
+
 def auto_detect_port(cfg: Optional[SerialConfig] = None) -> Optional[str]:
     """Pick the most likely USB-UART port. Returns None when there is nothing to pick."""
     cfg = cfg or SerialConfig()

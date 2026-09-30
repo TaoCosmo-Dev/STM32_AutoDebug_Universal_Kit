@@ -85,6 +85,8 @@ graph TD
   "summary": "空指针解引用（NULL Pointer Dereference）：程序访问了 NULL 或接近 0 的地址 0x00000004。",
   "signature": "FAULT|HardFault|PC=0x08000B12|CFSR=0x00008200",
   "repeated_failure": false,
+  "source_unchanged": false,
+  "archive_dir": "MDK-ARM/.autodebug",
   "next_actions": ["空指针解引用。检查该地址附近的结构体指针是否在使用前完成初始化 ..."]
 }
 ```
@@ -241,13 +243,14 @@ HAL 的 `assert_param` 与 C99 `assert` 格式同样能被解析。
 
 ## 诊断报告结构
 
-工程根目录 `diagnostic_report.json`（最新一轮）+ `.autodebug/iter_NN_*.json`（历史归档）。
+`.uvprojx` 所在目录的 `diagnostic_report.json`（最新一轮）+ 同目录 `.autodebug/iter_NN_*.json`（历史归档）。CubeMX 工程中即 `MDK-ARM/`。
 
 | 字段 | 说明 |
 |---|---|
-| `status` | `BUILD_FAILED` / `FLASH_FAILED` / `HARD_FAULT` / `ASSERTION_FAILED` / `TIMEOUT` / `SERIAL_UNAVAILABLE` / `TEST_PASSED` |
-| `signature` | 失败指纹，用于停滞检测（编译错误指纹 / `PC+CFSR` 指纹）|
+| `status` | `BUILD_FAILED` / `FLASH_FAILED` / `HARD_FAULT` / `ASSERTION_FAILED` / `TIMEBASE_SKEW` / `TIMEOUT` / `SERIAL_UNAVAILABLE` / `TEST_PASSED` |
+| `signature` | 失败指纹，用于停滞检测（编译错误指纹 / `PC+CFSR` 指纹 / `TIMEOUT\|no bytes` 等）|
 | `repeated_failure` | 与上一轮完全相同 → 上次修改没生效 |
+| `source_unchanged` | 源码与上一轮逐字节相同、失败也相同 → 根因不在代码；这种重跑不计入停滞判定 |
 | `compiler_errors[]` | `file_path` / `line_number` / `error_code` / `message` |
 | `fault_diagnostics` | CFSR/HFSR 原值、解码标志、栈帧、`fault_address`、`suggested_fix` |
 | `source_context` | 崩溃点文件、行号、函数名、前后 5 行代码 |
@@ -288,6 +291,7 @@ HAL 的 `assert_param` 与 C99 `assert` 格式同样能被解析。
 |---|---|
 | **不可回滚** | 每轮 AI 修改前 `git stash create` + `git tag autodebug/iter-NN`。**不动工作区、不动索引、不在分支上产生提交**；回退用 `git checkout <sha> -- .` |
 | **来回震荡** | 报告带 `signature`，连续 `stall_threshold`(默认 2) 轮相同 → 退出码 5 停机交人工 |
+| **误判"改了没用"** | 每轮编译后按内容对全部源文件取指纹。源码没变、失败相同的重跑标 `source_unchanged`，不计数、不触发停机——那是环境问题，不是补丁无效 |
 | **失忆** | `.autodebug/history.jsonl` 逐轮记录；`state.json` 让**跨进程调用**（AI 每次单独跑一次脚本）也能延续迭代计数与停滞检测 |
 
 ---
@@ -308,6 +312,8 @@ debugger:
   frequency_hz: 4000000
   connect_mode: "under-reset"   # 固件把 SWD 引脚复用掉时仍能连上
   flash_address: 0x08000000     # J-Link 裸烧录基址
+  auto_install_pack: true       # 缺芯片支持包时，闭环开始前自动 pyocd pack install（需联网）
+  pack_files: []                # 离线：本地 .pack 文件路径，直接交给 pyOCD，不走包索引
 
 build:
   timeout_seconds: 600    # HAL 工程冷全量编译远超 120s
@@ -339,8 +345,24 @@ loop:
   archive_reports: true
   archive_dir: ".autodebug"
   stall_threshold: 2
+  stall_window: 6
   halt_target_on_finish: false
+  timebase_check: true          # 测试通过后经 SWD 实测 uwTick / xTickCount 走速
+  timebase_sample_seconds: 0.5  # 慢时基（如 100 Hz）会自动延长采样，最长 2 秒
+  timebase_tolerance: 0.05      # 偏差超过 5% 判 TIMEBASE_SKEW（退出码 3）
 ```
+
+### 离线安装芯片支持包
+
+无法联网时，自动安装会失败。在能上网的电脑上下载对应的 `.pack`（例如 `http://www.keil.com/pack/Keil.STM32F1xx_DFP.2.4.1.pack`），拷过来后写进配置：
+
+```yaml
+debugger:
+  pack_files:
+    - "D:/packs/Keil.STM32F1xx_DFP.2.4.1.pack"
+```
+
+套件会在每次打开调试会话（以及 CLI 兜底烧录）时把它交给 pyOCD。不要用运行时注册的办法（`PackTargets.populate_targets_from_pack`），它只对当前进程有效，下次运行就没了。
 
 ---
 

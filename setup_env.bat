@@ -103,6 +103,22 @@ if %ERRORLEVEL% NEQ 0 (
     )
 )
 
+:: pip on Windows can leave a package half-replaced under a "~" folder while
+:: reporting success. deps_check.py clears that, tries every import, and
+:: force-reinstalls whatever still fails.
+echo       校验依赖能否正常导入...
+"%PY%" autodebug\deps_check.py
+if %ERRORLEVEL% NEQ 0 goto :deps_broken
+goto :deps_ok
+
+:deps_broken
+echo.
+echo [错误] 依赖已安装但无法导入，按上面的提示处理后重新双击本文件。
+pause
+exit /b 1
+
+:deps_ok
+
 :: ---------------------------------------------------------------- 3/5 芯片包
 echo.
 if /I "%~1"=="--with-packs" goto :install_packs

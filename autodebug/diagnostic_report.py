@@ -23,6 +23,7 @@ STATUS_ASSERTION_FAILED = "ASSERTION_FAILED"
 STATUS_TEST_FAILED = "TEST_FAILED"
 STATUS_TIMEOUT = "TIMEOUT"
 STATUS_SERIAL_UNAVAILABLE = "SERIAL_UNAVAILABLE"
+STATUS_TIMEBASE_SKEW = "TIMEBASE_SKEW"
 STATUS_PASSED = "TEST_PASSED"
 
 
@@ -52,6 +53,7 @@ class DiagnosticReport:
     serial_log_tail: str = ""
     next_actions: List[str] = field(default_factory=list)
     repeated_failure: bool = False
+    source_unchanged: bool = False       # same failure, and not one source file changed
     ai_repair_prompt: str = ""
 
     def to_json(self, indent: int = 2) -> str:
@@ -83,6 +85,42 @@ def _unrecognized_target(message: str) -> Optional[str]:
         return None
     m = re.search(r"[Tt]arget type\s+(\S+?)\s+not recognized", message)
     return m.group(1).strip("'\"") if m else None
+
+
+# A HAL module the project does not carry fails three different ways, depending on how
+# far the build got: the header is missing, its types are unknown, or its functions are
+# unresolved at link time. All three have the same one-command fix.
+_HAL_HEADER = re.compile(r"stm32\w+?_hal_([a-z0-9]+?)(?:_ex)?\.h", re.I)
+_HAL_HANDLE = re.compile(r"\b([A-Z0-9]+)_HandleTypeDef\b")
+_HAL_FUNC = re.compile(r"\bHAL_([A-Z0-9]+?)(?:Ex)?_[A-Za-z]")
+_NOT_MODULES = {"GPIO", "RCC", "CORTEX", "FLASH", "PWR", "DMA", "EXTI", "NVIC", "SYSTICK",
+                "INIT", "DELAY", "GETTICK", "INCTICK", "MSPINIT", "OK", "ERROR",
+                "CONF", "DEF"}
+
+
+def missing_hal_modules(errors) -> List[str]:
+    """HAL modules that compile/link errors show the project is missing, in order seen."""
+    found: List[str] = []
+    for err in errors or []:
+        message = getattr(err, "message", "") or ""
+        candidates = []
+        if "cannot open source input file" in message or "file not found" in message:
+            candidates += _HAL_HEADER.findall(message)
+        lowered = message.lower()
+        if "undefined" in lowered or "unknown type name" in lowered:
+            candidates += _HAL_HANDLE.findall(message) + _HAL_FUNC.findall(message)
+        for name in candidates:
+            name = name.upper()
+            if name in _NOT_MODULES:
+                continue
+            if name.lower() not in found:
+                found.append(name.lower())
+    return found
+
+
+def _is_stlink_vcp(hwid: Optional[str]) -> bool:
+    """ST-Link V2-1 / V3 virtual COM ports all enumerate as VID 0483, PID 37xx."""
+    return bool(re.search(r"VID:PID=0483:37[0-9A-F]{2}", hwid or "", re.I))
 
 
 class DiagnosticReporter:
@@ -128,6 +166,12 @@ class DiagnosticReporter:
         ]
         if build_result.return_code not in (0, 1, 2, 3):
             actions.insert(0, "UV4 退出码异常：确认工程未被 uVision IDE 占用、器件支持包已安装、License 有效。")
+        modules = missing_hal_modules(build_result.errors)
+        if modules:
+            actions.insert(0, (
+                f"工程缺少 HAL 模块 {', '.join(modules)}（头文件、类型或函数找不到）。一条命令补齐"
+                f"「打开模块宏 + 补驱动文件 + 注册进工程」：`python run_autodebug.py --project <工程> "
+                f"--enable-hal {' '.join(modules)}`。工程带 .ioc 时，也可以在 CubeMX 里启用该外设后重新生成。"))
 
         lines += ["", "## 修复目标", *[f"{i+1}. {a}" for i, a in enumerate(actions)]]
 
@@ -329,7 +373,9 @@ class DiagnosticReporter:
                             pass_keywords: List[str],
                             serial_ok: bool = True,
                             open_error: Optional[str] = None,
-                            firmware_problems: Optional[List[str]] = None) -> DiagnosticReport:
+                            firmware_problems: Optional[List[str]] = None,
+                            port_hwid: Optional[str] = None) -> DiagnosticReport:
+        silent = serial_ok and not (raw_output or "").strip()
         if not serial_ok:
             status = STATUS_SERIAL_UNAVAILABLE
             summary = f"串口不可用：{open_error}"
@@ -349,6 +395,26 @@ class DiagnosticReporter:
                 "若程序卡死在某个 while 等待，按规范给所有硬件等待循环加超时退出计数器。",
             ]
             signature = "TIMEOUT|no pass token"
+
+        if silent:
+            # Not one byte in the whole window. With firmware that does print (the
+            # contract check found its token) that is a broken or misrouted link far more
+            # often than a firmware bug -- yet every generic suggestion above points at the
+            # firmware, and an AI following them rewrites UART code that was correct.
+            summary = f"{timeout_seconds:.0f}s 内串口 {port or ''} 没有收到任何字节"
+            signature = "TIMEOUT|no bytes"
+            link = [
+                "整个窗口期一个字节都没收到：先查物理链路，再怀疑固件。确认开发板的 TX 接到了"
+                "USB-TTL / 调试器的 RX、双方共地，且固件输出所用的 USART 正是接线的那一个。",
+            ]
+            if _is_stlink_vcp(port_hwid):
+                link.append(
+                    f"{port} 是 ST-Link 自带的虚拟串口（USB VID 0483）。只有开发板把 ST-Link 的"
+                    f"串口引脚接到了 MCU 的某个 USART，它才会有数据：查原理图确认是哪一个，"
+                    f"printf 与 cm_backtrace_putchar 都必须走它。独立的最小系统板配 ST-Link 时"
+                    f"通常没有这条线，需要用杜邦线把 ST-Link 的 TX/RX 接到 MCU 的 RX/TX"
+                    f"（F103 的 USART1 为 PA10/PA9）并共地。")
+            actions = link + actions
 
         if firmware_problems:
             # Nine times out of ten a silent run is not a bug in the firmware logic, it is
@@ -384,6 +450,66 @@ class DiagnosticReporter:
             status=status,
             summary=summary,
             signature=signature,
+            serial_log_tail=_tail(raw_output),
+            next_actions=actions,
+            ai_repair_prompt="\n".join(lines),
+        )
+
+    # ------------------------------------------------------------------ timebase
+
+    @staticmethod
+    def create_from_timebase_skew(iteration: int, proj_path: str, raw_output: str,
+                                  findings, context: Optional[Dict[str, Any]] = None
+                                  ) -> DiagnosticReport:
+        """The firmware passed its own tests, but its clock runs at the wrong speed."""
+        context = context or {}
+        worst = max(findings, key=lambda f: abs(f.ratio - 1.0))
+        factor = worst.ratio if worst.ratio >= 1 else 1.0 / worst.ratio
+        direction = "快" if worst.ratio > 1 else "慢"
+        summary = (f"时基错误：{worst.name} 实测 {worst.measured_hz:.1f} Hz，"
+                   f"应为 {worst.expected_hz:.0f} Hz（{direction} {factor:.2f} 倍）。"
+                   f"通过令牌虽已打印，所有延时与定时都不准。")
+
+        actions = []
+        if abs(factor - 8.0) < 0.4:
+            actions.append(
+                "实测正好差 8 倍：几乎可以确定是 SysTick 时钟源（HCLK 与 HCLK/8）与重装载值不匹配。"
+                "FreeRTOS 工程先查 FreeRTOSConfig.h：不要定义 configSYSTICK_CLOCK_HZ——一旦定义，"
+                "port.c 会把 SysTick 切到 HCLK/8，而重装载值仍按 configCPU_CLOCK_HZ 计算。")
+        actions += [
+            "核对 SystemCoreClock 与芯片实际主频：HSE_VALUE 是否等于板上晶振频率，PLL 倍频是否正确。",
+            "FreeRTOS：configCPU_CLOCK_HZ 应为 SystemCoreClock，configTICK_RATE_HZ 与预期一致。",
+            "HAL：不要改动 HAL_InitTick / uwTickFreq；时基若改用定时器（TIMx），检查它的预分频与重装载。",
+            "修正后重跑闭环；本检查在测试通过后自动进行，可用 loop.timebase_check: false 关闭。",
+        ]
+
+        lines = [
+            f"# STM32 时基自检失败（迭代 {iteration}）",
+            f"**结论**: {summary}",
+            "",
+            "## 实测",
+            "| 计数器 | 实测 | 应为 | 比值 |",
+            "|---|---|---|---|",
+            *[f"| `{f.name}` | {f.measured_hz:.1f} Hz | {f.expected_hz:.0f} Hz | {f.ratio:.3f} |"
+              for f in findings],
+        ]
+        if context:
+            lines += ["", "## SysTick 现场（经 SWD 读取）",
+                      *[f"- `{k}` = {v}" for k, v in context.items()]]
+        lines += ["", "## 处理建议", *[f"{i+1}. {a}" for i, a in enumerate(actions)]]
+
+        return DiagnosticReport(
+            timestamp=time.strftime("%Y-%m-%d %H:%M:%S"),
+            iteration=iteration,
+            project_path=proj_path,
+            status=STATUS_TIMEBASE_SKEW,
+            summary=summary,
+            signature=f"TIMEBASE|{worst.name}|x{worst.ratio:.2f}",
+            fault_diagnostics={"timebase": [
+                {"counter": f.name, "measured_hz": round(f.measured_hz, 2),
+                 "expected_hz": f.expected_hz, "ticks": f.ticks,
+                 "seconds": round(f.seconds, 4)} for f in findings],
+                "systick": context},
             serial_log_tail=_tail(raw_output),
             next_actions=actions,
             ai_repair_prompt="\n".join(lines),

@@ -117,12 +117,16 @@ class HardwareProbe:
     # ------------------------------------------------------------------ session lifetime
 
     def _session_options(self) -> dict:
-        return {
+        options = {
             "connect_mode": self.config.connect_mode,
             "frequency": self.config.frequency_hz,
             "resume_on_disconnect": False,   # we decide when the core runs
             "warning.cortex_m_default": False,
         }
+        packs = [p for p in (self.config.pack_files or []) if p]
+        if packs:
+            options["pack"] = packs          # offline device packs, see DebuggerConfig
+        return options
 
     def open(self) -> bool:
         """Open one pyOCD session and keep it for the whole run. Never prompts."""
@@ -251,6 +255,9 @@ class HardwareProbe:
         cmd = [sys.executable, "-m", "pyocd", "flash", "-t", target_type]
         if probe_uid:
             cmd.extend(["-u", probe_uid])
+        for pack in (self.config.pack_files or []):
+            if pack:
+                cmd.extend(["--pack", pack])
         cmd.append(binary_path)
         try:
             res = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
@@ -322,6 +329,25 @@ class HardwareProbe:
             return True
         except Exception:
             return False
+
+    def read_memory(self, address: int, width: int = 32) -> Optional[int]:
+        """Read one word from target memory without halting the core.
+
+        Memory goes through the AHB access port, which -- unlike the core registers --
+        is readable while the CPU runs, so sampling a tick counter this way leaves the
+        firmware's timing untouched. None when there is no session or the read fails.
+        """
+        if self.config.type == "jlink" or not self.open():
+            return None
+        target = self._session.target
+        try:
+            if width == 8:
+                return int(target.read8(address))
+            if width == 16:
+                return int(target.read16(address))
+            return int(target.read32(address))
+        except Exception:
+            return None
 
     def is_target_running(self, sample_gap: float = 0.05) -> Optional[bool]:
         """CPU liveness telemetry.
